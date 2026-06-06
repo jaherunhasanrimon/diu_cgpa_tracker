@@ -8,6 +8,7 @@ class StudentRepository {
     required String department,
     required String intake,
     required int semester,
+    required bool isRegular,
 
   }) async {
 
@@ -18,6 +19,7 @@ class StudentRepository {
         'department': department,
         'intake': intake,
         'semester': semester,
+        'isRegular': isRegular,
       },
     );
 
