@@ -1,4 +1,5 @@
 import '../../../cgpa/data/models/semester_result_model.dart';
+import '../../../academic_exception/data/models/academic_exception_model.dart';
 
 class RegistrationModel {
   final String university;
@@ -15,6 +16,9 @@ class RegistrationModel {
 
   final Map<int, double> sgpaHistory;
 
+  final bool isRegular;
+  final List<AcademicExceptionModel> exceptions;
+
   RegistrationModel({
     required this.university,
     required this.name,
@@ -29,6 +33,8 @@ class RegistrationModel {
     required this.results,
 
     this.sgpaHistory = const {},
+    this.isRegular = true,
+    this.exceptions = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -50,30 +56,33 @@ class RegistrationModel {
           .toList(),
 
       'sgpaHistory': sgpaHistory.map((k, v) => MapEntry(k.toString(), v)),
+      'isRegular': isRegular,
+      'exceptions': exceptions.map((e) => e.toMap()).toList(),
     };
   }
 
   factory RegistrationModel.fromMap(Map data) {
     return RegistrationModel(
-      university: data['university'],
-      name: data['name'],
-      email: data['email'],
+      university: data['university'] ?? '',
+      name: data['name'] ?? '',
+      email: data['email'] ?? '',
 
-      department: data['department'],
-      admissionTerm: data['admissionTerm'],
-      year: data['year'],
+      department: data['department'] ?? '',
+      admissionTerm: data['admissionTerm'] ?? '',
+      year: data['year'] ?? '',
 
-      completedSemester: data['completedSemester'],
+      completedSemester: data['completedSemester'] ?? 0,
 
-      results: (data['results'] as List)
-          .map(
-            (e) => SemesterResultModel(
-              semester: (e['semester'] as num).toInt(),
-              sgpa: (e['sgpa'] as num).toDouble(),
-              credit: (e['credit'] as num).toDouble(),
-            ),
-          )
-          .toList(),
+      results: (data['results'] as List?)
+              ?.map(
+                (e) => SemesterResultModel(
+                  semester: (e['semester'] as num).toInt(),
+                  sgpa: (e['sgpa'] as num).toDouble(),
+                  credit: (e['credit'] as num).toDouble(),
+                ),
+              )
+              .toList() ??
+          const [],
 
       sgpaHistory: (() {
         final map = <int, double>{};
@@ -88,6 +97,11 @@ class RegistrationModel {
         }
         return map;
       })(),
+      isRegular: data['isRegular'] as bool? ?? true,
+      exceptions: (data['exceptions'] as List?)
+              ?.map((e) => AcademicExceptionModel.fromMap(e))
+              .toList() ??
+          const [],
     );
   }
 }

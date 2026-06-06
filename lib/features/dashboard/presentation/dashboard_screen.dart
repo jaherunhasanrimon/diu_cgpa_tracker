@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../academic/domain/curriculum_engine.dart';
 import '../../academic/providers/academic_provider.dart';
+import '../../academic_exception/providers/academic_exception_provider.dart';
 import '../../cgpa/providers/cgpa_provider.dart';
 
 import 'widgets/academic_tool_card.dart';
@@ -24,10 +25,14 @@ class DashboardScreen extends ConsumerWidget {
     final department = student?['department']?.toString() ?? 'CSE';
     final intake = student?['intake']?.toString() ?? 'Unknown intake';
     final currentSemester = (student?['semester'] as num?)?.toInt() ?? 0;
+    final isRegular = student?['isRegular'] as bool? ?? true;
+
     final totalCredits = summary.completedCredits;
     final totalCurriculumCredits = CurriculumEngine().totalCreditForIntake(
       intake: intake,
     );
+    final remainingCredits = (totalCurriculumCredits - totalCredits).clamp(0.0, double.infinity);
+
     final degreeProgress = totalCurriculumCredits == 0
         ? 0.0
         : (totalCredits / totalCurriculumCredits).clamp(0.0, 1.0);
@@ -57,6 +62,7 @@ class DashboardScreen extends ConsumerWidget {
                       ref.invalidate(cgpaSummaryProvider);
                       ref.invalidate(semesterResultsProvider);
                       ref.invalidate(studentProvider);
+                      ref.invalidate(academicExceptionsProvider);
 
                       if (!context.mounted) {
                         return;
@@ -73,7 +79,9 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.md),
                   _ProgressPanel(
                     completedCredits: totalCredits,
+                    remainingCredits: remainingCredits,
                     completedSemesters: summary.completedSemesters,
+                    isRegular: isRegular,
                     degreeProgress: degreeProgress,
                     totalCurriculumCredits: totalCurriculumCredits,
                   ),
@@ -175,13 +183,17 @@ class _DashboardHeader extends StatelessWidget {
 
 class _ProgressPanel extends StatelessWidget {
   final double completedCredits;
+  final double remainingCredits;
   final int completedSemesters;
+  final bool isRegular;
   final double degreeProgress;
   final double totalCurriculumCredits;
 
   const _ProgressPanel({
     required this.completedCredits,
+    required this.remainingCredits,
     required this.completedSemesters,
+    required this.isRegular,
     required this.degreeProgress,
     required this.totalCurriculumCredits,
   });
@@ -203,15 +215,34 @@ class _ProgressPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: _MetricTile(
-                  label: 'Completed credits',
+                  label: 'Completed Credits',
                   value: completedCredits.toStringAsFixed(1),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _MetricTile(
-                  label: 'Completed semesters',
+                  label: 'Remaining Credits',
+                  value: remainingCredits.toStringAsFixed(1),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricTile(
+                  label: 'Completed Semesters',
                   value: completedSemesters.toString(),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _MetricTile(
+                  label: 'Academic Track',
+                  value: isRegular ? 'Regular' : 'Irregular',
+                  valueColor: isRegular ? AppColors.success : AppColors.warning,
                 ),
               ),
             ],
@@ -242,8 +273,13 @@ class _ProgressPanel extends StatelessWidget {
 class _MetricTile extends StatelessWidget {
   final String label;
   final String value;
+  final Color? valueColor;
 
-  const _MetricTile({required this.label, required this.value});
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +295,12 @@ class _MetricTile extends StatelessWidget {
           children: [
             Text(label, style: AppTextStyles.bodyMedium),
             const SizedBox(height: AppSpacing.xs),
-            Text(value, style: AppTextStyles.headingMedium),
+            Text(
+              value,
+              style: AppTextStyles.headingMedium.copyWith(
+                color: valueColor ?? AppColors.textPrimary,
+              ),
+            ),
           ],
         ),
       ),

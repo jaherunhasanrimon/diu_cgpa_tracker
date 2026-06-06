@@ -4,6 +4,8 @@ import '../data/models/registration_model.dart';
 import '../repository/registration_repository.dart';
 
 import '../../academic/domain/curriculum_engine.dart';
+import '../../academic_exception/data/models/academic_exception_model.dart';
+import '../../academic_exception/repository/academic_exception_repository.dart';
 import '../../cgpa/data/models/semester_result_model.dart';
 
 class RegistrationState {
@@ -21,6 +23,9 @@ class RegistrationState {
 
   final Map<int, double> sgpaHistory;
 
+  final bool isRegular;
+  final List<AcademicExceptionModel> exceptions;
+
   RegistrationState({
     this.university = '',
     this.name = '',
@@ -35,6 +40,8 @@ class RegistrationState {
     this.results = const [],
 
     this.sgpaHistory = const {},
+    this.isRegular = true,
+    this.exceptions = const [],
   });
 
   RegistrationState copyWith({
@@ -50,6 +57,8 @@ class RegistrationState {
 
     List<SemesterResultModel>? results,
     Map<int, double>? sgpaHistory,
+    bool? isRegular,
+    List<AcademicExceptionModel>? exceptions,
   }) {
     return RegistrationState(
       university: university ?? this.university,
@@ -65,6 +74,8 @@ class RegistrationState {
 
       results: results ?? this.results,
       sgpaHistory: sgpaHistory ?? this.sgpaHistory,
+      isRegular: isRegular ?? this.isRegular,
+      exceptions: exceptions ?? this.exceptions,
     );
   }
 }
@@ -203,6 +214,39 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     return true;
   }
 
+  void setIsRegular(bool value) {
+    state = state.copyWith(
+      isRegular: value,
+      exceptions: value ? const [] : state.exceptions,
+    );
+  }
+
+  void addException(AcademicExceptionModel exception) {
+    state = state.copyWith(
+      exceptions: [...state.exceptions, exception],
+    );
+  }
+
+  void removeException(String id) {
+    state = state.copyWith(
+      exceptions: state.exceptions.where((e) => e.id != id).toList(),
+    );
+  }
+
+  void clearExceptions() {
+    state = state.copyWith(
+      exceptions: const [],
+    );
+  }
+
+  void updateException(AcademicExceptionModel exception) {
+    state = state.copyWith(
+      exceptions: state.exceptions
+          .map((e) => e.id == exception.id ? exception : e)
+          .toList(),
+    );
+  }
+
   List<SemesterResultModel> _rebuildResults({
     required RegistrationState sourceState,
     required Map<int, double> sgpaHistory,
@@ -266,9 +310,13 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
 
       results: state.results,
       sgpaHistory: state.sgpaHistory,
+
+      isRegular: state.isRegular,
+      exceptions: state.exceptions,
     );
 
     await RegistrationRepository().save(model);
+    await AcademicExceptionRepository().save(state.exceptions);
   }
 }
 

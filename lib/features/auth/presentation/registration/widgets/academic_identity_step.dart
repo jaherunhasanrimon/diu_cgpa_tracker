@@ -5,6 +5,8 @@ import '../../../../../core/theme/app_text_styles.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../academic/domain/curriculum_engine.dart';
+import '../../../../academic/domain/intake_resolver.dart';
+import '../../../../academic/data/models/intake_model.dart';
 import '../../../providers/registration_provider.dart';
 
 class AcademicIdentityStep extends ConsumerWidget {
@@ -88,6 +90,12 @@ class AcademicIdentityStep extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
 
           DropdownButtonFormField<String>(
+            key: ValueKey(data.admissionTerm),
+            initialValue: (data.admissionTerm.isNotEmpty &&
+                    (IntakeResolver().resolve(data.admissionTerm).system == SemesterSystem.tri ||
+                     IntakeResolver().resolve(data.admissionTerm).system == SemesterSystem.hybrid))
+                ? '12'
+                : '8',
             decoration: const InputDecoration(
               labelText: 'Program Structure',
               border: OutlineInputBorder(),

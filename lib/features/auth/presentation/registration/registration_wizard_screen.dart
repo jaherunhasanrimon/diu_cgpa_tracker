@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../academic/repository/student_repository.dart';
+import '../../../academic/providers/academic_provider.dart';
+import '../../../academic_exception/providers/academic_exception_provider.dart';
 
 import '../../../cgpa/repository/cgpa_repository.dart';
 import '../../../cgpa/providers/cgpa_provider.dart';
@@ -182,11 +184,15 @@ class _RegistrationWizardScreenState
                           intake: data.admissionTerm,
 
                           semester: data.completedSemester,
+
+                          isRegular: data.isRegular,
                         );
 
                         ref.invalidate(cgpaProvider);
                         ref.invalidate(cgpaSummaryProvider);
                         ref.invalidate(semesterResultsProvider);
+                        ref.invalidate(studentProvider);
+                        ref.invalidate(academicExceptionsProvider);
 
                         if (!context.mounted) {
                           return;
