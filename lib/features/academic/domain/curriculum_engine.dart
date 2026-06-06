@@ -6,6 +6,12 @@ class CurriculumEngine {
     return CseCurriculumSource.getSupportedIntakes();
   }
 
+  double totalCreditForIntake({required String intake}) {
+    return CseCurriculumSource.getSemesters(
+      intake: intake,
+    ).fold<double>(0, (total, semester) => total + semester.credit);
+  }
+
   List<SemesterModel> generatePlan({
     required String intake,
 

@@ -185,6 +185,8 @@ class _RegistrationWizardScreenState
                         );
 
                         ref.invalidate(cgpaProvider);
+                        ref.invalidate(cgpaSummaryProvider);
+                        ref.invalidate(semesterResultsProvider);
 
                         if (!context.mounted) {
                           return;
