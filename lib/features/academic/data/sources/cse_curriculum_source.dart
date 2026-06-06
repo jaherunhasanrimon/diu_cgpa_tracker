@@ -1,50 +1,23 @@
-import '../models/course_model.dart';
 import '../models/semester_model.dart';
-
+import 'cse_curriculum_data.dart';
 
 class CseCurriculumSource {
+  static List<SemesterModel> getSemesters({required String intake}) {
+    final credits = CseCurriculumData.credits[intake] ?? [];
 
+    return List.generate(
+      credits.length,
+      (index) => SemesterModel(
+        name: 'Level ${(index ~/ 3) + 1} Term ${(index % 3) + 1}',
 
-  static final List<SemesterModel> semesters = [
+        semesterNumber: index + 1,
 
+        credit: credits[index].toDouble(),
+      ),
+    );
+  }
 
-    SemesterModel(
-
-      semesterNumber: 1,
-
-      name: "L1T1",
-
-      courses: [
-
-        CourseModel(
-          code: "ENG101",
-          title: "Basic Functional English",
-          credit: 3,
-        ),
-
-
-        CourseModel(
-          code: "MAT101",
-          title: "Mathematics I",
-          credit: 3,
-        ),
-
-
-        CourseModel(
-          code: "CSE112",
-          title: "Computer Fundamentals",
-          credit: 3,
-        ),
-
-
-      ],
-
-    ),
-
-
-
-  ];
-
-
-
+  static List<String> getSupportedIntakes() {
+    return CseCurriculumData.credits.keys.toList(growable: false);
+  }
 }

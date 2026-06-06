@@ -1,30 +1,50 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:diu_cgpa_tracker/features/auth/providers/registration_provider.dart';
+import 'package:diu_cgpa_tracker/features/cgpa/data/models/semester_result_model.dart';
+import 'package:diu_cgpa_tracker/features/cgpa/domain/cgpa_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:diu_cgpa_tracker/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('calculates weighted CGPA from curriculum credits', () {
+    final cgpa = CgpaEngine().calculate(const [
+      SemesterResultModel(semester: 1, sgpa: 3, credit: 19.5),
+      SemesterResultModel(semester: 2, sgpa: 3, credit: 19.5),
+      SemesterResultModel(semester: 3, sgpa: 3, credit: 13.5),
+    ]);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(cgpa, 3.0);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  test('registration SGPA input uses curriculum credits', () {
+    final notifier = RegistrationNotifier()
+      ..setAcademicInfo(
+        department: 'Computer Science & Engineering',
+        admissionTerm: 'Spring 2024',
+        completedSemester: 3,
+      )
+      ..setSemesterSGPA(1, 3)
+      ..setSemesterSGPA(2, 3)
+      ..setSemesterSGPA(3, 3);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(notifier.state.results.map((result) => result.credit), [
+      19.5,
+      19.5,
+      13.5,
+    ]);
+    expect(CgpaEngine().calculate(notifier.state.results), 3.0);
+  });
+
+  test('updating an existing result does not reuse stale credit', () {
+    final notifier = RegistrationNotifier()
+      ..setAcademicInfo(
+        department: 'Computer Science & Engineering',
+        admissionTerm: 'Spring 2024',
+        completedSemester: 3,
+      )
+      ..updateResults(const [
+        SemesterResultModel(semester: 1, sgpa: 2, credit: 0),
+      ])
+      ..updateSemesterResult(1, 3);
+
+    expect(notifier.state.results.single.credit, 19.5);
   });
 }

@@ -16,13 +16,10 @@ class OnboardingScreen extends StatelessWidget {
 
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(
-            AppSpacing.lg,
-          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
 
           child: Column(
             children: [
-
               const Spacer(),
 
               Container(
@@ -30,7 +27,7 @@ class OnboardingScreen extends StatelessWidget {
                 width: 240,
 
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
 
                   borderRadius: BorderRadius.circular(40),
                 ),

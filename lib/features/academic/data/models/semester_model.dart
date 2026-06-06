@@ -1,39 +1,11 @@
-import 'course_model.dart';
-
-
 class SemesterModel {
-
-
-  final int semesterNumber;
-
   final String name;
-
-  final List<CourseModel> courses;
-
+  final int semesterNumber;
+  final double credit;
 
   const SemesterModel({
-
-    required this.semesterNumber,
     required this.name,
-    required this.courses,
-
+    required this.semesterNumber,
+    required this.credit,
   });
-
-
-
-  double get totalCredit {
-
-
-    return courses.fold(
-
-      0,
-
-          (sum, course) => sum + course.credit,
-
-    );
-
-
-  }
-
-
 }

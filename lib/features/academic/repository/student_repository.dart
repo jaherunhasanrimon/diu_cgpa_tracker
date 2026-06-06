@@ -12,7 +12,7 @@ class StudentRepository {
   }) async {
 
 
-    await HiveService.appBox.put(
+    await HiveService.box.put(
       'student',
       {
         'department': department,
@@ -29,7 +29,7 @@ class StudentRepository {
 
   Map? getStudent(){
 
-    return HiveService.appBox.get(
+    return HiveService.box.get(
       'student',
     );
 
@@ -39,7 +39,7 @@ class StudentRepository {
 
   bool hasStudent(){
 
-    return HiveService.appBox.containsKey(
+    return HiveService.box.containsKey(
       'student',
     );
 

@@ -4,10 +4,10 @@ import '../../features/auth/presentation/registration/registration_wizard_screen
 import '../../features/auth/presentation/auth_gate_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/cgpa/presentation/cgpa_details_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/splash/presentation/splash_screen.dart';
-
 class AppRouter {
   AppRouter._();
 
@@ -52,6 +52,14 @@ class AppRouter {
         path: '/dashboard',
         builder: (context, state) => const DashboardScreen(),
       ),
+
+      GoRoute(
+        path: '/cgpa-details',
+        builder: (context, state) {
+          return const CgpaDetailsScreen();
+        },
+      ),
+
 
     ],
   );

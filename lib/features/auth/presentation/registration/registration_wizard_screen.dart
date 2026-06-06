@@ -1,76 +1,73 @@
 import 'package:flutter/material.dart';
-import '../../../academic/repository/student_repository.dart';
 import 'package:go_router/go_router.dart';
-import 'widgets/academic_identity_step.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../academic/repository/student_repository.dart';
+
+import '../../../cgpa/repository/cgpa_repository.dart';
+import '../../../cgpa/providers/cgpa_provider.dart';
+
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
+
 import '../../../../shared/widgets/primary_button.dart';
 
-class RegistrationWizardScreen extends StatefulWidget {
+import '../../providers/registration_provider.dart';
+
+import 'widgets/academic_identity_step.dart' as identity_step;
+
+import 'widgets/semester_progress_step.dart' as semester_step;
+
+import 'widgets/sgpa_history_step.dart' as sgpa_step;
+
+import 'widgets/academic_exception_step.dart' as exception_step;
+
+import 'widgets/review_step.dart' as review_step;
+
+class RegistrationWizardScreen extends ConsumerStatefulWidget {
   const RegistrationWizardScreen({super.key});
 
   @override
-  State<RegistrationWizardScreen> createState() =>
+  ConsumerState<RegistrationWizardScreen> createState() =>
       _RegistrationWizardScreenState();
 }
 
 class _RegistrationWizardScreenState
-    extends State<RegistrationWizardScreen> {
-
+    extends ConsumerState<RegistrationWizardScreen> {
   int currentStep = 0;
 
   final List<String> stepTitles = [
     'Academic Identity',
+
     'Semester Progress',
+
     'SGPA History',
+
     'Academic Exceptions',
+
     'Review',
   ];
 
-  void nextStep() {
-
-    if (currentStep < stepTitles.length - 1) {
-
-      setState(() {
-        currentStep++;
-      });
-
-    }
-  }
-
   void previousStep() {
-
     if (currentStep > 0) {
-
       setState(() {
         currentStep--;
       });
-
     }
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-
-      appBar: AppBar(
-        title: Text(
-          stepTitles[currentStep],
-        ),
-      ),
+      appBar: AppBar(title: Text(stepTitles[currentStep])),
 
       body: Padding(
-        padding: const EdgeInsets.all(
-          AppSpacing.lg,
-        ),
+        padding: const EdgeInsets.all(AppSpacing.lg),
 
         child: Column(
-
           crossAxisAlignment: CrossAxisAlignment.start,
 
           children: [
-
             LinearProgressIndicator(
               value: (currentStep + 1) / stepTitles.length,
             ),
@@ -79,15 +76,13 @@ class _RegistrationWizardScreenState
 
             Text(
               'Step ${currentStep + 1} of ${stepTitles.length}',
+
               style: AppTextStyles.bodyMedium,
             ),
 
             const SizedBox(height: AppSpacing.sm),
 
-            Text(
-              stepTitles[currentStep],
-              style: AppTextStyles.headingMedium,
-            ),
+            Text(stepTitles[currentStep], style: AppTextStyles.headingMedium),
 
             const SizedBox(height: AppSpacing.xl),
 
@@ -96,34 +91,31 @@ class _RegistrationWizardScreenState
                 index: currentStep,
 
                 children: const [
+                  identity_step.AcademicIdentityStep(),
 
-                  AcademicIdentityStep(),
+                  semester_step.SemesterProgressStep(),
 
-                  Center(child: Text('Semester Progress Step')),
+                  sgpa_step.SgpaHistoryStep(),
 
-                  Center(child: Text('SGPA History Step')),
+                  exception_step.AcademicExceptionStep(),
 
-                  Center(child: Text('Academic Exception Step')),
-
-                  Center(child: Text('Review Step')),
+                  review_step.ReviewStep(),
                 ],
               ),
             ),
 
             Row(
-
               children: [
-
                 if (currentStep > 0)
                   Expanded(
                     child: OutlinedButton(
                       onPressed: previousStep,
+
                       child: const Text('Back'),
                     ),
                   ),
 
-                if (currentStep > 0)
-                  const SizedBox(width: AppSpacing.md),
+                if (currentStep > 0) const SizedBox(width: AppSpacing.md),
 
                 Expanded(
                   child: PrimaryButton(
@@ -132,40 +124,78 @@ class _RegistrationWizardScreenState
                         : 'Continue',
 
                     onPressed: () async {
+                      final data = ref.read(registrationProvider);
 
-                      if (currentStep == stepTitles.length - 1) {
+                      // STEP 1 CHECK
+                      if (currentStep == 0) {
+                        if (data.department.isEmpty ||
+                            data.admissionTerm.isEmpty ||
+                            data.completedSemester == 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Please complete academic information',
+                              ),
+                            ),
+                          );
 
-                        final repo = StudentRepository();
-
-
-                        await repo.saveStudent(
-
-                          department: 'CSE',
-
-                          intake: 'Spring 2025',
-
-                          semester: 1,
-
-                        );
-
-
-                        if (!mounted) return;
-
-
-                        context.go(
-                          '/dashboard',
-                        );
-
-                      } else {
-
-                        setState(() {
-
-                          currentStep++;
-
-                        });
-
+                          return;
+                        }
                       }
 
+                      // SGPA CHECK
+                      if (currentStep == 2) {
+                        final isComplete = ref
+                            .read(registrationProvider.notifier)
+                            .hasCompleteSemesterResults();
+
+                        if (!isComplete) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Please enter all semester SGPA and select a supported intake',
+                              ),
+                            ),
+                          );
+
+                          return;
+                        }
+                      }
+
+                      // FINISH
+                      if (currentStep == stepTitles.length - 1) {
+                        final repo = StudentRepository();
+
+                        final cgpaRepo = CgpaRepository();
+
+                        debugPrint('Saving Results: ${data.results}');
+
+                        await ref
+                            .read(registrationProvider.notifier)
+                            .finishRegistration();
+
+                        await cgpaRepo.save(data.results);
+
+                        await repo.saveStudent(
+                          department: data.department,
+
+                          intake: data.admissionTerm,
+
+                          semester: data.completedSemester,
+                        );
+
+                        ref.invalidate(cgpaProvider);
+
+                        if (!context.mounted) {
+                          return;
+                        }
+
+                        context.go('/dashboard');
+                      } else {
+                        setState(() {
+                          currentStep++;
+                        });
+                      }
                     },
                   ),
                 ),
