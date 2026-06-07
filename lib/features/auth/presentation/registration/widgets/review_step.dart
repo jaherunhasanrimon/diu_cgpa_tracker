@@ -27,9 +27,8 @@ class ReviewStep extends ConsumerWidget {
       (total, result) => total + result.credit,
     );
 
-    final retakesCount = data.exceptions.where((e) => e.type == 'retake').length;
-    final improvementsCount = data.exceptions.where((e) => e.type == 'improvement').length;
-    final droppedCount = data.exceptions.where((e) => e.type == 'dropped').length;
+    final pendingCount = data.exceptions.where((e) => !e.completed).length;
+    final completedCount = data.exceptions.where((e) => e.completed).length;
 
     return SingleChildScrollView(
       child: Column(
@@ -129,13 +128,29 @@ class ReviewStep extends ConsumerWidget {
               ),
               child: Column(
                 children: [
-                  _SummaryItem(label: 'Retakes', count: retakesCount, color: AppColors.danger),
+                  _SummaryItem(label: 'Pending Incomplete Courses', count: pendingCount, color: AppColors.danger),
                   const Divider(height: AppSpacing.sm),
-                  _SummaryItem(label: 'Improvements', count: improvementsCount, color: AppColors.warning),
-                  const Divider(height: AppSpacing.sm),
-                  _SummaryItem(label: 'Dropped Courses', count: droppedCount, color: AppColors.secondary),
+                  _SummaryItem(label: 'Completed Retakes', count: completedCount, color: AppColors.success),
                 ],
               ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Exception course list details
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: data.exceptions.length,
+              itemBuilder: (context, index) {
+                final e = data.exceptions[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(
+                    '• ${e.courseId}: ${e.courseName} (Original Sem: ${e.originalSemester}, '
+                    '${e.completed ? "Completed in Sem ${e.completedSemester}" : "Pending retake"})',
+                    style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.lg),
           ],

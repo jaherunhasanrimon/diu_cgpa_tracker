@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../academic_exception/domain/exception_engine.dart';
 import '../../academic_exception/providers/academic_exception_provider.dart';
+import '../../auth/repository/registration_repository.dart';
 import '../data/models/semester_result_model.dart';
 import '../domain/cgpa_engine.dart';
 import '../repository/cgpa_repository.dart';
@@ -63,4 +64,11 @@ final cgpaSummaryProvider = Provider<CgpaSummary>((ref) {
     latestSemester: latest?.semester,
     latestSgpa: latest?.sgpa,
   );
+});
+
+/// Exposes the saved student intake (e.g. "Tri", "Spring 2024") from storage
+/// so downstream widgets can map semester numbers → curriculum courses.
+final studentIntakeProvider = Provider<String>((ref) {
+  final profile = RegistrationRepository().get();
+  return profile?.admissionTerm ?? 'Tri';
 });

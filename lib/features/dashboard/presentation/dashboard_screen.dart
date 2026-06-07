@@ -8,11 +8,13 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../academic/domain/curriculum_engine.dart';
 import '../../academic/providers/academic_provider.dart';
+import '../../academic_exception/domain/exception_engine.dart';
 import '../../academic_exception/providers/academic_exception_provider.dart';
 import '../../cgpa/providers/cgpa_provider.dart';
 
 import 'widgets/academic_tool_card.dart';
 import 'widgets/cgpa_card.dart';
+import 'widgets/semester_plan_panel.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -36,6 +38,14 @@ class DashboardScreen extends ConsumerWidget {
     final degreeProgress = totalCurriculumCredits == 0
         ? 0.0
         : (totalCredits / totalCurriculumCredits).clamp(0.0, 1.0);
+
+    final exceptions = ref.watch(academicExceptionsProvider);
+    final runningSemester = currentSemester + 1;
+    final plan = ExceptionEngine().generatePlanForSemester(
+      intake: intake,
+      targetSemester: runningSemester,
+      exceptions: exceptions,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -87,6 +97,8 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   _LatestResultPanel(summary: summary),
+                  const SizedBox(height: AppSpacing.md),
+                  SemesterPlanPanel(plan: plan, intake: intake),
                   const SizedBox(height: AppSpacing.xl),
                   Text('Academic Tools', style: AppTextStyles.headingMedium),
                   const SizedBox(height: AppSpacing.md),

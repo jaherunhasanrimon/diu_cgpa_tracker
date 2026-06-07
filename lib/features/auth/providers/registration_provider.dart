@@ -227,9 +227,9 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     );
   }
 
-  void removeException(String id) {
+  void removeException(String courseId) {
     state = state.copyWith(
-      exceptions: state.exceptions.where((e) => e.id != id).toList(),
+      exceptions: state.exceptions.where((e) => e.courseId != courseId).toList(),
     );
   }
 
@@ -242,7 +242,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
   void updateException(AcademicExceptionModel exception) {
     state = state.copyWith(
       exceptions: state.exceptions
-          .map((e) => e.id == exception.id ? exception : e)
+          .map((e) => e.courseId == exception.courseId ? exception : e)
           .toList(),
     );
   }

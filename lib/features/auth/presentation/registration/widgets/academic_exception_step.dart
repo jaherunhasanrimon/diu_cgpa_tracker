@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_text_styles.dart';
-import '../../../../academic/data/sources/cse_courses_data.dart';
+import '../../../../academic/data/sources/cse_curriculum_source.dart';
 import '../../../../academic/data/models/course_model.dart';
 import '../../../../academic_exception/data/models/academic_exception_model.dart';
 import '../../../providers/registration_provider.dart';
@@ -17,13 +16,15 @@ class AcademicExceptionStep extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(registrationProvider);
     final notifier = ref.read(registrationProvider.notifier);
+    final completedSemester = state.completedSemester;
+    final intake = state.admissionTerm;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Do you have any retake, improvement, dropped or incomplete courses?',
+            'Do you have any failed, dropped, incomplete, or delayed courses?',
             style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -35,7 +36,10 @@ class AcademicExceptionStep extends ConsumerWidget {
                   subtitle: 'Regular Student',
                   isSelected: state.isRegular,
                   icon: Icons.check_circle_outline,
-                  onTap: () => notifier.setIsRegular(true),
+                  onTap: () {
+                    notifier.setIsRegular(true);
+                    notifier.clearExceptions();
+                  },
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -53,13 +57,57 @@ class AcademicExceptionStep extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xl),
           if (state.isRegular)
             _RegularBanner()
-          else
-            _IrregularFormSection(
-              exceptions: state.exceptions,
-              completedSemester: state.completedSemester,
-              onAdd: (exception) => notifier.addException(exception),
-              onRemove: (id) => notifier.removeException(id),
+          else ...[
+            Text(
+              'Select courses you could not complete:',
+              style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: AppSpacing.md),
+            _CourseSelectorSection(
+              intake: intake,
+              completedSemester: completedSemester,
+              exceptions: state.exceptions,
+              onChanged: (course, originalSem, isChecked) {
+                if (isChecked) {
+                  notifier.addException(
+                    AcademicExceptionModel(
+                      courseId: course.code,
+                      courseName: course.title,
+                      credit: course.credit,
+                      originalSemester: originalSem,
+                      type: 'FAILED',
+                      completed: false,
+                      overridePrerequisite: false,
+                    ),
+                  );
+                } else {
+                  notifier.removeException(course.code);
+                }
+              },
+            ),
+            if (state.exceptions.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'Completion Status for Selected Courses',
+                style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: state.exceptions.length,
+                separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.md),
+                itemBuilder: (context, index) {
+                  final exception = state.exceptions[index];
+                  return _CompletionStatusCard(
+                    exception: exception,
+                    completedSemesterLimit: completedSemester,
+                    onUpdate: (updated) => notifier.updateException(updated),
+                  );
+                },
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -185,132 +233,79 @@ class _RegularBanner extends StatelessWidget {
   }
 }
 
-class _IrregularFormSection extends StatelessWidget {
-  final List<AcademicExceptionModel> exceptions;
+class _CourseSelectorSection extends StatelessWidget {
+  final String intake;
   final int completedSemester;
-  final ValueChanged<AcademicExceptionModel> onAdd;
-  final ValueChanged<String> onRemove;
+  final List<AcademicExceptionModel> exceptions;
+  final void Function(CourseModel course, int originalSem, bool isChecked) onChanged;
 
-  const _IrregularFormSection({
-    required this.exceptions,
+  const _CourseSelectorSection({
+    required this.intake,
     required this.completedSemester,
-    required this.onAdd,
-    required this.onRemove,
+    required this.exceptions,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Exceptions Record',
+      children: List.generate(completedSemester, (semIndex) {
+        final semesterNum = semIndex + 1;
+        final courses = CseCurriculumSource.getCoursesForSemester(
+          intake: intake,
+          semesterNumber: semesterNum,
+        );
+
+        if (courses.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: ExpansionTile(
+            title: Text(
+              'Semester $semesterNum Courses',
               style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
             ),
-            TextButton.icon(
-              onPressed: () => _showAddExceptionSheet(context),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Exception'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        if (exceptions.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: AppSpacing.md),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.assignment_late_outlined,
-                  color: AppColors.textSecondary.withValues(alpha: 0.5),
-                  size: 48,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'No exceptions listed yet',
-                  style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Tap "+ Add Exception" to record your retake, improvement, or dropped courses.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium,
-                ),
-              ],
-            ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: exceptions.length,
-            separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.md),
-            itemBuilder: (context, index) {
-              final exception = exceptions[index];
-              return _ExceptionCard(
-                exception: exception,
-                onDelete: () => onRemove(exception.id),
-              );
-            },
-          ),
-      ],
-    );
-  }
+            subtitle: Text('${courses.length} courses mapped'),
+            children: courses.map((course) {
+              final isChecked = exceptions.any((e) => e.courseId == course.code);
 
-  void _showAddExceptionSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return _AddExceptionForm(
-          completedSemester: completedSemester,
-          onSave: (exception) {
-            onAdd(exception);
-            Navigator.pop(context);
-          },
+              return CheckboxListTile(
+                activeColor: AppColors.primary,
+                title: Text(
+                  '${course.code}: ${course.title}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text('Credit: ${course.credit}'),
+                value: isChecked,
+                onChanged: (val) => onChanged(course, semesterNum, val ?? false),
+              );
+            }).toList(),
+          ),
         );
-      },
+      }),
     );
   }
 }
 
-class _ExceptionCard extends StatelessWidget {
+class _CompletionStatusCard extends StatelessWidget {
   final AcademicExceptionModel exception;
-  final VoidCallback onDelete;
+  final int completedSemesterLimit;
+  final ValueChanged<AcademicExceptionModel> onUpdate;
 
-  const _ExceptionCard({required this.exception, required this.onDelete});
+  const _CompletionStatusCard({
+    required this.exception,
+    required this.completedSemesterLimit,
+    required this.onUpdate,
+  });
 
   @override
   Widget build(BuildContext context) {
-    Color typeColor;
-    String typeLabel;
-
-    switch (exception.type) {
-      case 'retake':
-        typeColor = AppColors.danger;
-        typeLabel = 'Retake';
-        break;
-      case 'improvement':
-        typeColor = AppColors.warning;
-        typeLabel = 'Improvement';
-        break;
-      default:
-        typeColor = AppColors.secondary;
-        typeLabel = 'Dropped';
-    }
+    final canBeCompleted = completedSemesterLimit > exception.originalSemester;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -319,242 +314,157 @@ class _ExceptionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: typeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              typeLabel,
-              style: TextStyle(
-                color: typeColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'FAILED / INCOMPLETE',
+                  style: TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${exception.courseCode}: ${exception.courseTitle}',
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  '${exception.courseId}: ${exception.courseName}',
                   style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Sem ${exception.semester} • ${exception.credit} Credits${_gradeSuffix()}',
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Have you already completed it?',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              ),
+              Row(
+                children: [
+                  _StatusChoiceButton(
+                    label: 'NO',
+                    isSelected: !exception.completed,
+                    onTap: () {
+                      onUpdate(
+                        exception.copyWith(
+                          completed: false,
+                          completedSemester: null,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  _StatusChoiceButton(
+                    label: 'YES',
+                    isSelected: exception.completed,
+                    onTap: !canBeCompleted
+                        ? null
+                        : () {
+                            onUpdate(
+                              exception.copyWith(
+                                completed: true,
+                                completedSemester: exception.originalSemester + 1,
+                              ),
+                            );
+                          },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (exception.completed && canBeCompleted) ...[
+            const SizedBox(height: AppSpacing.md),
+            DropdownButtonFormField<int>(
+              initialValue: exception.completedSemester ?? (exception.originalSemester + 1),
+              decoration: const InputDecoration(
+                labelText: 'Completed In Semester',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: List.generate(
+                completedSemesterLimit - exception.originalSemester,
+                (index) {
+                  final semNum = exception.originalSemester + 1 + index;
+                  return DropdownMenuItem(
+                    value: semNum,
+                    child: Text('Semester $semNum'),
+                  );
+                },
+              ),
+              onChanged: (value) {
+                if (value == null) return;
+                onUpdate(
+                  exception.copyWith(completedSemester: value),
+                );
+              },
             ),
-          ),
-          IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-          ),
+          ],
+          if (!canBeCompleted) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Cannot mark completed (failed in the latest completed semester).',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
-
-  String _gradeSuffix() {
-    if (exception.type == 'dropped') return '';
-    final oldG = exception.oldGrade ?? '';
-    final newG = exception.newGrade ?? 'Pending';
-    return ' • Grade: $oldG → $newG';
-  }
 }
 
-class _AddExceptionForm extends StatefulWidget {
-  final int completedSemester;
-  final ValueChanged<AcademicExceptionModel> onSave;
+class _StatusChoiceButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback? onTap;
 
-  const _AddExceptionForm({
-    required this.completedSemester,
-    required this.onSave,
+  const _StatusChoiceButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
-  State<_AddExceptionForm> createState() => _AddExceptionFormState();
-}
-
-class _AddExceptionFormState extends State<_AddExceptionForm> {
-  String type = 'retake'; // 'retake', 'improvement', 'dropped'
-  int selectedSemester = 1;
-  CourseModel? selectedCourse;
-  String? oldGrade;
-  String? newGrade = 'Pending';
-
-  final List<String> grades = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'D', 'F'];
-
-  @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final bottomInset = mediaQuery.viewInsets.bottom;
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg + bottomInset,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Add Academic Exception',
-                style: AppTextStyles.headingMedium.copyWith(fontSize: 20),
-              ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
+    final isEnabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary
+              : (isEnabled ? AppColors.backgroundLight : AppColors.border.withValues(alpha: 0.5)),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
           ),
-          const SizedBox(height: AppSpacing.md),
-          DropdownButtonFormField<String>(
-            initialValue: type,
-            decoration: const InputDecoration(
-              labelText: 'Exception Type',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'retake', child: Text('Retake Course')),
-              DropdownMenuItem(value: 'improvement', child: Text('Improvement Course')),
-              DropdownMenuItem(value: 'dropped', child: Text('Dropped / Incomplete Course')),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() {
-                type = value;
-                if (type == 'dropped') {
-                  oldGrade = null;
-                  newGrade = null;
-                } else {
-                  oldGrade = oldGrade ?? 'F';
-                  newGrade = newGrade ?? 'Pending';
-                }
-              });
-            },
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? Colors.white
+                : (isEnabled ? AppColors.textPrimary : AppColors.textSecondary.withValues(alpha: 0.5)),
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
           ),
-          const SizedBox(height: AppSpacing.md),
-          DropdownButtonFormField<int>(
-            initialValue: selectedSemester,
-            decoration: const InputDecoration(
-              labelText: 'Semester Occurred',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(
-              widget.completedSemester,
-              (index) => DropdownMenuItem(
-                value: index + 1,
-                child: Text('Semester ${index + 1}'),
-              ),
-            ),
-            onChanged: (value) {
-              if (value == null) return;
-              setState(() {
-                selectedSemester = value;
-              });
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          DropdownButtonFormField<CourseModel>(
-            initialValue: selectedCourse,
-            decoration: const InputDecoration(
-              labelText: 'Select Course',
-              border: OutlineInputBorder(),
-            ),
-            items: CseCoursesData.courses
-                .map(
-                  (course) => DropdownMenuItem(
-                    value: course,
-                    child: Text('${course.code}: ${course.title} (${course.credit} credits)'),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) {
-              setState(() {
-                selectedCourse = value;
-              });
-            },
-          ),
-          if (type != 'dropped') ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: oldGrade ?? 'F',
-                    decoration: const InputDecoration(
-                      labelText: 'Original Grade',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: grades
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        oldGrade = value;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: newGrade ?? 'Pending',
-                    decoration: const InputDecoration(
-                      labelText: 'New/Expected Grade',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [...grades, 'Pending']
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        newGrade = value;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: selectedCourse == null
-                  ? null
-                  : () {
-                      final exception = AcademicExceptionModel(
-                        id: const Uuid().v4(),
-                        type: type,
-                        courseCode: selectedCourse!.code,
-                        courseTitle: selectedCourse!.title,
-                        credit: selectedCourse!.credit,
-                        semester: selectedSemester,
-                        oldGrade: oldGrade ?? (type == 'dropped' ? null : 'F'),
-                        newGrade: newGrade,
-                      );
-                      widget.onSave(exception);
-                    },
-              child: const Text('Add Exception'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

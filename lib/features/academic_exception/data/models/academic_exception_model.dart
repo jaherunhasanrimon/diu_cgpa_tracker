@@ -1,69 +1,73 @@
 class AcademicExceptionModel {
-  final String id;
-  final String type; // 'retake', 'improvement', 'dropped'
-  final String courseCode;
-  final String courseTitle;
+  final String courseId;
+  final String courseName;
   final double credit;
-  final int semester;
-  final String? oldGrade;
-  final String? newGrade;
+  final int originalSemester;
+  final String type; // 'FAILED', 'DROPPED', 'INCOMPLETE'
+  final bool completed;
+  final int? completedSemester;
+  final bool overridePrerequisite;
 
   const AcademicExceptionModel({
-    required this.id,
-    required this.type,
-    required this.courseCode,
-    required this.courseTitle,
+    required this.courseId,
+    required this.courseName,
     required this.credit,
-    required this.semester,
-    this.oldGrade,
-    this.newGrade,
+    required this.originalSemester,
+    required this.type,
+    required this.completed,
+    this.completedSemester,
+    required this.overridePrerequisite,
   });
 
   AcademicExceptionModel copyWith({
-    String? id,
-    String? type,
-    String? courseCode,
-    String? courseTitle,
+    String? courseId,
+    String? courseName,
     double? credit,
-    int? semester,
-    String? oldGrade,
-    String? newGrade,
+    int? originalSemester,
+    String? type,
+    bool? completed,
+    int? completedSemester,
+    /// Set to true to explicitly clear completedSemester back to null.
+    bool clearCompletedSemester = false,
+    bool? overridePrerequisite,
   }) {
     return AcademicExceptionModel(
-      id: id ?? this.id,
-      type: type ?? this.type,
-      courseCode: courseCode ?? this.courseCode,
-      courseTitle: courseTitle ?? this.courseTitle,
+      courseId: courseId ?? this.courseId,
+      courseName: courseName ?? this.courseName,
       credit: credit ?? this.credit,
-      semester: semester ?? this.semester,
-      oldGrade: oldGrade ?? this.oldGrade,
-      newGrade: newGrade ?? this.newGrade,
+      originalSemester: originalSemester ?? this.originalSemester,
+      type: type ?? this.type,
+      completed: completed ?? this.completed,
+      completedSemester: clearCompletedSemester
+          ? null
+          : (completedSemester ?? this.completedSemester),
+      overridePrerequisite: overridePrerequisite ?? this.overridePrerequisite,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'type': type,
-      'courseCode': courseCode,
-      'courseTitle': courseTitle,
+      'courseId': courseId,
+      'courseName': courseName,
       'credit': credit,
-      'semester': semester,
-      'oldGrade': oldGrade,
-      'newGrade': newGrade,
+      'originalSemester': originalSemester,
+      'type': type,
+      'completed': completed,
+      'completedSemester': completedSemester,
+      'overridePrerequisite': overridePrerequisite,
     };
   }
 
   factory AcademicExceptionModel.fromMap(Map map) {
     return AcademicExceptionModel(
-      id: map['id']?.toString() ?? '',
-      type: map['type']?.toString() ?? '',
-      courseCode: map['courseCode']?.toString() ?? '',
-      courseTitle: map['courseTitle']?.toString() ?? '',
+      courseId: map['courseId']?.toString() ?? '',
+      courseName: map['courseName']?.toString() ?? '',
       credit: (map['credit'] as num?)?.toDouble() ?? 0.0,
-      semester: (map['semester'] as num?)?.toInt() ?? 1,
-      oldGrade: map['oldGrade']?.toString(),
-      newGrade: map['newGrade']?.toString(),
+      originalSemester: (map['originalSemester'] as num?)?.toInt() ?? 1,
+      type: map['type']?.toString() ?? 'FAILED',
+      completed: map['completed'] as bool? ?? false,
+      completedSemester: (map['completedSemester'] as num?)?.toInt(),
+      overridePrerequisite: map['overridePrerequisite'] as bool? ?? false,
     );
   }
 }
