@@ -10,9 +10,9 @@ import '../../../../academic_exception/data/models/academic_exception_model.dart
 import '../../../../academic_exception/domain/exception_engine.dart';
 import '../../../providers/registration_provider.dart';
 
-/// Step shown only for irregular students (isRegular == false).
-/// Allows semester-by-semester review of past courses (with failed ones
-/// highlighted) and a prerequisite override UI for the next semester.
+/// Redesigned Course Plan Review step.
+/// Matches the reference UI: clean semester plan card, ACTION REQUIRED block
+/// for retakes, and PREREQUISITE BLOCKED block for overrides.
 class CoursePlanReviewStep extends ConsumerWidget {
   const CoursePlanReviewStep({super.key});
 
@@ -24,7 +24,6 @@ class CoursePlanReviewStep extends ConsumerWidget {
     final completedSemester = state.completedSemester;
     final exceptions = state.exceptions;
 
-    // Guard: if somehow accessed while regular or before setup
     if (intake.isEmpty || completedSemester == 0) {
       return const Center(child: Text('Please complete academic setup first.'));
     }
@@ -35,121 +34,70 @@ class CoursePlanReviewStep extends ConsumerWidget {
       targetSemester: nextSemester,
       exceptions: exceptions,
     );
-    final hasBlocked = nextPlan.blockedCourses.isNotEmpty;
-
-    // All failed courses that are not yet completed — shown for retake scheduling
-    final pendingExceptions =
-        exceptions.where((e) => !e.completed).toList();
+    final pendingExceptions = exceptions.where((e) => !e.completed).toList();
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Info Banner ────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline_rounded,
-                    color: AppColors.primary, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'Review your courses semester by semester. '
-                    'Failed courses are in red. '
-                    'For your next semester, schedule which failed courses to retake '
-                    'and override prerequisite blocks if department-approved.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
+          // ── Subtitle ──────────────────────────────────────────────
+          Text(
+            'Review your next semester courses. Failed and prerequisite '
+            'courses need your attention before continuing.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
 
-          // ── Warning if blocked courses exist ──────────────────────
-          if (hasBlocked)
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.md),
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: AppColors.warning, size: 20),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      '${nextPlan.blockedCourses.length} course(s) in Semester $nextSemester '
-                      'are blocked due to incomplete prerequisites. '
-                      'Toggle the switch to override and allow enrollment.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: 13,
-                        color: const Color(0xFF92400E),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          // ── Completed Semesters (compact collapsible) ─────────────
+          if (completedSemester > 0) ...[
+            _SectionHeader(
+              label: 'COMPLETED SEMESTERS',
+              icon: Icons.history_edu_rounded,
+              color: AppColors.textSecondary,
             ),
+            const SizedBox(height: AppSpacing.sm),
+            ...List.generate(completedSemester, (i) {
+              final semNum = i + 1;
+              final courses = CseCurriculumSource.getCoursesForSemester(
+                intake: intake,
+                semesterNumber: semNum,
+              );
+              final failedIds = exceptions
+                  .where((e) => e.originalSemester == semNum)
+                  .map((e) => e.courseId)
+                  .toSet();
+              return _CompactSemesterTile(
+                semesterNumber: semNum,
+                courses: courses,
+                failedIds: failedIds,
+              );
+            }),
+            const SizedBox(height: AppSpacing.lg),
+          ],
 
-          // ── Completed Semesters ───────────────────────────────────
-          ...List.generate(completedSemester, (i) {
-            final semNum = i + 1;
-            final courses = CseCurriculumSource.getCoursesForSemester(
-              intake: intake,
-              semesterNumber: semNum,
-            );
-            final failedIds = exceptions
-                .where((e) => e.originalSemester == semNum)
-                .map((e) => e.courseId)
-                .toSet();
-
-            return _CompletedSemesterCard(
-              semesterNumber: semNum,
-              courses: courses,
-              failedIds: failedIds,
-            );
-          }),
-
-          // ── Next Semester ─────────────────────────────────────────
-          _NextSemesterCard(
+          // ── Next Semester Plan ─────────────────────────────────────
+          _NextSemesterPlanSection(
             semesterNumber: nextSemester,
             plan: nextPlan,
             pendingExceptions: pendingExceptions,
             exceptions: exceptions,
             onRetakeToggle: (exception, scheduleForNext) {
               if (scheduleForNext) {
-                // Schedule this failed course for the next semester
                 notifier.updateException(
                   exception.copyWith(completedSemester: nextSemester),
                 );
               } else {
-                // Unschedule — clear the planned semester
                 notifier.updateException(
                   exception.copyWith(clearCompletedSemester: true),
                 );
               }
             },
             onOverrideToggle: (course, isOverriding) {
-              final existing = exceptions
-                  .where((e) => e.courseId == course.code)
-                  .firstOrNull;
+              final existing =
+                  exceptions.where((e) => e.courseId == course.code).firstOrNull;
               if (existing != null) {
                 notifier.updateException(
                   existing.copyWith(overridePrerequisite: isOverriding),
@@ -169,7 +117,6 @@ class CoursePlanReviewStep extends ConsumerWidget {
               }
             },
           ),
-
           const SizedBox(height: AppSpacing.xl),
         ],
       ),
@@ -178,345 +125,238 @@ class CoursePlanReviewStep extends ConsumerWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Completed Semester Card
+// Section Header (ALL-CAPS label + icon)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class _CompletedSemesterCard extends StatefulWidget {
-  final int semesterNumber;
-  final List<CourseModel> courses;
-  final Set<String> failedIds;
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
 
-  const _CompletedSemesterCard({
-    required this.semesterNumber,
-    required this.courses,
-    required this.failedIds,
-  });
-
-  @override
-  State<_CompletedSemesterCard> createState() => _CompletedSemesterCardState();
-}
-
-class _CompletedSemesterCardState extends State<_CompletedSemesterCard> {
-  bool _expanded = false;
-
-  Color get _headerColor => widget.failedIds.isEmpty
-      ? AppColors.success
-      : AppColors.danger;
-
-  @override
-  Widget build(BuildContext context) {
-    final failCount = widget.failedIds.length;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _expanded
-              ? (_headerColor.withValues(alpha: 0.3))
-              : AppColors.border,
-          width: _expanded ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          children: [
-            // Header
-            InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
-                child: Row(
-                  children: [
-                    // Semester number chip
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _expanded
-                            ? _headerColor
-                            : _headerColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${widget.semesterNumber}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: _expanded ? Colors.white : _headerColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Semester ${widget.semesterNumber}',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              _statusPill(
-                                '${widget.courses.length - failCount} Passed',
-                                AppColors.success,
-                              ),
-                              if (failCount > 0) ...[
-                                const SizedBox(width: 6),
-                                _statusPill(
-                                  '$failCount Failed',
-                                  AppColors.danger,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Completed badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Completed',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.success,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    AnimatedRotation(
-                      turns: _expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 250),
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: _expanded
-                            ? _headerColor
-                            : AppColors.textSecondary,
-                        size: 22,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Expanded courses
-            AnimatedSize(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeInOut,
-              child: _expanded
-                  ? Column(
-                      children: [
-                        Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: AppColors.border,
-                          indent: AppSpacing.md,
-                          endIndent: AppSpacing.md,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.md,
-                              AppSpacing.sm,
-                              AppSpacing.md,
-                              AppSpacing.md),
-                          child: Column(
-                            children: widget.courses
-                                .asMap()
-                                .entries
-                                .map((entry) {
-                              final i = entry.key;
-                              final course = entry.value;
-                              final isFailed =
-                                  widget.failedIds.contains(course.code);
-                              final isLast =
-                                  i == widget.courses.length - 1;
-                              return _CompletedCourseRow(
-                                index: i + 1,
-                                course: course,
-                                isFailed: isFailed,
-                                isLast: isLast,
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusPill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Completed Course Row
-// ──────────────────────────────────────────────────────────────────────────────
-
-class _CompletedCourseRow extends StatelessWidget {
-  final int index;
-  final CourseModel course;
-  final bool isFailed;
-  final bool isLast;
-
-  const _CompletedCourseRow({
-    required this.index,
-    required this.course,
-    required this.isFailed,
-    required this.isLast,
+  const _SectionHeader({
+    required this.label,
+    required this.icon,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    final codeColor = isFailed ? AppColors.danger : AppColors.primary;
-    final titleColor =
-        isFailed ? AppColors.danger : AppColors.textPrimary;
-
-    return Column(
+    return Row(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Index
-              SizedBox(
-                width: 22,
-                child: Text(
-                  '$index.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Code badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: codeColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  course.code,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: codeColor,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              // Title
-              Expanded(
-                child: Text(
-                  course.title,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 13,
-                    color: titleColor,
-                    fontWeight:
-                        isFailed ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              // Status icon / badge
-              if (isFailed)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'FAILED',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.danger,
-                    ),
-                  ),
-                )
-              else
-                const Icon(Icons.check_circle_outline,
-                    size: 18, color: AppColors.success),
-            ],
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: color,
+            letterSpacing: 0.8,
           ),
         ),
-        if (!isLast)
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            color: AppColors.border.withValues(alpha: 0.6),
-          ),
       ],
     );
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Next Semester Card
+// Compact Semester Tile (collapsible, for completed semesters)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class _NextSemesterCard extends StatelessWidget {
+class _CompactSemesterTile extends StatefulWidget {
+  final int semesterNumber;
+  final List<CourseModel> courses;
+  final Set<String> failedIds;
+
+  const _CompactSemesterTile({
+    required this.semesterNumber,
+    required this.courses,
+    required this.failedIds,
+  });
+
+  @override
+  State<_CompactSemesterTile> createState() => _CompactSemesterTileState();
+}
+
+class _CompactSemesterTileState extends State<_CompactSemesterTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final failCount = widget.failedIds.length;
+    final passCount = widget.courses.length - failCount;
+    final hasIssues = failCount > 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: 12),
+              child: Row(
+                children: [
+                  // Semester chip
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: hasIssues
+                          ? AppColors.danger.withValues(alpha: 0.1)
+                          : AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${widget.semesterNumber}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: hasIssues ? AppColors.danger : AppColors.success,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Semester ${widget.semesterNumber}',
+                          style: AppTextStyles.bodyLarge.copyWith(
+                              fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            _statusPill('$passCount Passed', AppColors.success),
+                            if (failCount > 0) ...[
+                              const SizedBox(width: 6),
+                              _statusPill('$failCount Failed', AppColors.danger),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        size: 20, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const Divider(height: 1, indent: AppSpacing.md, endIndent: AppSpacing.md),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm,
+                  AppSpacing.md, AppSpacing.md),
+              child: Column(
+                children: widget.courses.map((course) {
+                  final isFailed = widget.failedIds.contains(course.code);
+                  return _CourseListRow(
+                    course: course,
+                    isFailed: isFailed,
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Widget _statusPill(String label, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+    ),
+  );
+}
+
+class _CourseListRow extends StatelessWidget {
+  final CourseModel course;
+  final bool isFailed;
+
+  const _CourseListRow({required this.course, required this.isFailed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(
+            isFailed ? Icons.close_rounded : Icons.check_rounded,
+            size: 16,
+            color: isFailed ? AppColors.danger : AppColors.success,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '${course.code}  ${course.title}',
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 13,
+                color:
+                    isFailed ? AppColors.danger : AppColors.textPrimary,
+                fontWeight:
+                    isFailed ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+          Text(
+            '${_creditStr(course.credit)} Credits',
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _creditStr(double credit) =>
+    credit % 1 == 0 ? credit.toInt().toString() : credit.toString();
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Next Semester Plan Section (main redesigned section)
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _NextSemesterPlanSection extends StatelessWidget {
   final int semesterNumber;
   final dynamic plan; // StudentSemesterPlan
   final List<AcademicExceptionModel> pendingExceptions;
   final List<AcademicExceptionModel> exceptions;
-  final void Function(AcademicExceptionModel exception, bool scheduleForNext)
-      onRetakeToggle;
-  final void Function(CourseModel course, bool isOverriding) onOverrideToggle;
+  final void Function(AcademicExceptionModel, bool) onRetakeToggle;
+  final void Function(CourseModel, bool) onOverrideToggle;
 
-  const _NextSemesterCard({
+  const _NextSemesterPlanSection({
     required this.semesterNumber,
     required this.plan,
     required this.pendingExceptions,
@@ -530,256 +370,476 @@ class _NextSemesterCard extends StatelessWidget {
     final regularCourses = plan.regularCourses as List<CourseModel>;
     final retakeCourses = plan.retakeCourses as List<CourseModel>;
     final blockedCourses = plan.blockedCourses as List<CourseModel>;
+    final totalCredits = plan.totalCredits as double;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header (always visible, not collapsible) ──
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.05),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(13)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Semester header row ────────────────────────────────────
+        Row(
+          children: [
+            Text(
+              'SEMESTER $semesterNumber PLAN',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                letterSpacing: 0.5,
+              ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '$semesterNumber',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Text(
+                'Total Credits: ${totalCredits.toStringAsFixed(1)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // ── Regular Courses ────────────────────────────────────────
+        if (regularCourses.isNotEmpty)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Green left-border header row
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                          color: AppColors.success, width: 4),
+                    ),
+                    color: AppColors.success.withValues(alpha: 0.04),
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(12)),
+                  ),
+                  child: Row(
                     children: [
+                      Icon(Icons.check_circle_rounded,
+                          size: 18, color: AppColors.success),
+                      const SizedBox(width: AppSpacing.sm),
                       Text(
-                        'Semester $semesterNumber',
+                        'Regular Courses (${regularCourses.length})',
                         style: AppTextStyles.bodyLarge.copyWith(
                           fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Your next semester',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          fontSize: 12,
-                          color: AppColors.primary,
+                          color: AppColors.success,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '${plan.totalCredits.toStringAsFixed(1)} cr',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.md,
+                      AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+                  child: Column(
+                    children: regularCourses.map((c) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.check_rounded,
+                                  size: 16, color: AppColors.success),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${c.code}  ${c.title}',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_creditStr(c.credit)} Credits',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1, thickness: 1, color: AppColors.border),
-
-          // ── Course sections ──
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+        // ── Retakes already scheduled (from prior step) ────────────
+        if (retakeCourses.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Schedule Retakes ──────────────────────────────────────
-                if (pendingExceptions.isNotEmpty) ...[
-                  _SectionLabel(
-                    label: 'Failed Courses — Schedule Retake',
-                    count: pendingExceptions.length,
-                    color: AppColors.warning,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: const Border(
+                      left: BorderSide(color: AppColors.warning, width: 4),
+                    ),
+                    color: AppColors.warning.withValues(alpha: 0.04),
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(12)),
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  // Small info hint
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: Text(
-                      'Toggle ON to include a failed course as a retake in Semester $semesterNumber.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                        fontStyle: FontStyle.italic,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.replay_circle_filled_rounded,
+                          size: 18, color: AppColors.warning),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Retakes Scheduled (${retakeCourses.length})',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.warning,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  ...pendingExceptions.map((e) {
-                    final isScheduled = e.completedSemester == semesterNumber;
-                    return _RetakeScheduleRow(
-                      exception: e,
-                      semesterNumber: semesterNumber,
-                      isScheduled: isScheduled,
-                      onToggle: (val) => onRetakeToggle(e, val),
-                    );
-                  }),
-                  const SizedBox(height: AppSpacing.md),
-                  const Divider(height: 1, color: AppColors.border),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-
-                // ── Regular Courses ───────────────────────────────────────
-                if (regularCourses.isNotEmpty) ...[
-                  _SectionLabel(
-                      label: 'Available Courses',
-                      count: regularCourses.length,
-                      color: AppColors.success),
-                  const SizedBox(height: AppSpacing.xs),
-                  ...regularCourses.map((c) => _PlanCourseRow(
-                        course: c,
-                        type: _CourseType.regular,
-                      )),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-
-                // ── Retakes Scheduled for this Semester ──────────────────
-                if (retakeCourses.isNotEmpty) ...[
-                  _SectionLabel(
-                      label: 'Retakes Scheduled for Sem $semesterNumber',
-                      count: retakeCourses.length,
-                      color: const Color(0xFFD97706)),
-                  const SizedBox(height: AppSpacing.xs),
-                  ...retakeCourses.map((c) => _PlanCourseRow(
-                        course: c,
-                        type: _CourseType.retake,
-                      )),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-
-                // ── Blocked Courses ───────────────────────────────────────
-                if (blockedCourses.isNotEmpty) ...[
-                  _SectionLabel(
-                      label: 'Blocked — Override if Approved',
-                      count: blockedCourses.length,
-                      color: AppColors.danger),
-                  const SizedBox(height: AppSpacing.xs),
-                  ...blockedCourses.map((c) {
-                    final isOverridden = exceptions.any(
-                        (e) => e.courseId == c.code && e.overridePrerequisite);
-                    return _BlockedCourseOverrideRow(
-                      course: c,
-                      isOverridden: isOverridden,
-                      onToggle: (val) => onOverrideToggle(c, val),
-                    );
-                  }),
-                ],
-
-                if (pendingExceptions.isEmpty &&
-                    regularCourses.isEmpty &&
-                    retakeCourses.isEmpty &&
-                    blockedCourses.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                    child: Text(
-                      'No courses mapped for this semester yet.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textSecondary),
-                    ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.md,
+                      AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+                  child: Column(
+                    children: retakeCourses.map((c) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(Icons.replay_rounded,
+                                  size: 16, color: AppColors.warning),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${c.code}  ${c.title}',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13.5),
+                                  ),
+                                  Text(
+                                    '${_creditStr(c.credit)} Credits',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
+                ),
               ],
             ),
           ),
         ],
-      ),
+
+        // ── ACTION REQUIRED ────────────────────────────────────────
+        if (pendingExceptions.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _SectionHeader(
+            label: 'ACTION REQUIRED',
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.warning,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You failed ${pendingExceptions.length} previous '
+                  '${pendingExceptions.length == 1 ? 'course' : 'courses'}. '
+                  'Choose what you want to do.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 13,
+                    color: const Color(0xFF92400E),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                ...pendingExceptions.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final e = entry.value;
+                  final isScheduled = e.completedSemester == semesterNumber;
+                  return Column(
+                    children: [
+                      if (i > 0)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.sm),
+                          child: Divider(
+                              height: 1,
+                              color: AppColors.warning.withValues(alpha: 0.2)),
+                        ),
+                      _ActionRequiredCourseCard(
+                        exception: e,
+                        semesterNumber: semesterNumber,
+                        isScheduled: isScheduled,
+                        onRetake: () => onRetakeToggle(e, true),
+                        onSkip: () => onRetakeToggle(e, false),
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+
+        // ── PREREQUISITE BLOCKED ───────────────────────────────────
+        if (blockedCourses.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _SectionHeader(
+            label: 'PREREQUISITE BLOCKED COURSE',
+            icon: Icons.lock_rounded,
+            color: AppColors.danger,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ...blockedCourses.map((c) {
+            final isOverridden = exceptions.any(
+                (e) => e.courseId == c.code && e.overridePrerequisite);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _BlockedCourseCard(
+                course: c,
+                isOverridden: isOverridden,
+                onToggle: (val) => onOverrideToggle(c, val),
+              ),
+            );
+          }),
+        ],
+
+        if (regularCourses.isEmpty &&
+            retakeCourses.isEmpty &&
+            pendingExceptions.isEmpty &&
+            blockedCourses.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline_rounded,
+                    color: AppColors.success),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'No courses mapped for this semester yet.',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Section Label
+// Action Required Course Card  (retake or skip)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  final int count;
-  final Color color;
+class _ActionRequiredCourseCard extends StatelessWidget {
+  final AcademicExceptionModel exception;
+  final int semesterNumber;
+  final bool isScheduled;
+  final VoidCallback onRetake;
+  final VoidCallback onSkip;
 
-  const _SectionLabel({
-    required this.label,
-    required this.count,
-    required this.color,
+  const _ActionRequiredCourseCard({
+    required this.exception,
+    required this.semesterNumber,
+    required this.isScheduled,
+    required this.onRetake,
+    required this.onSkip,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 3,
-          height: 14,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
+        // Course info row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${exception.courseId}: ${exception.courseName}',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Failed in Semester ${exception.originalSemester}  •  '
+                    '${_creditStr(exception.credit)} Credits',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'FAILED',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.danger,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // Retake This Semester button
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: isScheduled ? null : onRetake,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isScheduled ? AppColors.success : AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isScheduled
+                      ? Icons.check_circle_rounded
+                      : Icons.replay_rounded,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isScheduled
+                      ? 'Scheduled for Sem $semesterNumber'
+                      : 'Retake This Semester',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                if (!isScheduled) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'RECOMMENDED',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 7),
-        Text(
-          label,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 12,
-          ),
-        ),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: color,
+
+        const SizedBox(height: AppSpacing.sm),
+
+        // Skip For Now button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: isScheduled ? onSkip : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              side: BorderSide(
+                color: isScheduled
+                    ? AppColors.border
+                    : AppColors.border.withValues(alpha: 0.5),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text(
+              'Skip For Now',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
         ),
@@ -789,86 +849,15 @@ class _SectionLabel extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Plan course types
+// Blocked Course Card  (with override button)
 // ──────────────────────────────────────────────────────────────────────────────
 
-enum _CourseType { regular, retake }
-
-class _PlanCourseRow extends StatelessWidget {
-  final CourseModel course;
-  final _CourseType type;
-
-  const _PlanCourseRow({required this.course, required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final isRetake = type == _CourseType.retake;
-    final badgeColor = isRetake ? AppColors.warning : AppColors.success;
-    final badgeLabel = isRetake ? 'RETAKE' : 'AVAILABLE';
-    final iconData = isRetake
-        ? Icons.replay_circle_filled_rounded
-        : Icons.check_circle_outline_rounded;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Icon(iconData, size: 18, color: badgeColor),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${course.code}: ${course.title}',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '${course.credit % 1 == 0 ? course.credit.toInt() : course.credit} Credits',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              badgeLabel,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: badgeColor,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Blocked Course Row with Override Toggle
-// ──────────────────────────────────────────────────────────────────────────────
-
-class _BlockedCourseOverrideRow extends StatelessWidget {
+class _BlockedCourseCard extends StatelessWidget {
   final CourseModel course;
   final bool isOverridden;
   final ValueChanged<bool> onToggle;
 
-  const _BlockedCourseOverrideRow({
+  const _BlockedCourseCard({
     required this.course,
     required this.isOverridden,
     required this.onToggle,
@@ -877,96 +866,175 @@ class _BlockedCourseOverrideRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.sm, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: isOverridden
-            ? AppColors.primary.withValues(alpha: 0.04)
-            : AppColors.danger.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isOverridden
-              ? AppColors.primary.withValues(alpha: 0.25)
+              ? AppColors.primary.withValues(alpha: 0.3)
               : AppColors.danger.withValues(alpha: 0.25),
         ),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(
-              isOverridden
-                  ? Icons.lock_open_rounded
-                  : Icons.lock_outline_rounded,
-              size: 18,
-              color: isOverridden ? AppColors.primary : AppColors.danger,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${course.code}: ${course.title}',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isOverridden
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                // Prerequisites required
-                if (course.prerequisites.isNotEmpty)
-                  Text(
-                    'Requires: ${course.prerequisites.join(", ")}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.danger.withValues(alpha: 0.8),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                if (isOverridden)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      'Prerequisite overridden — department approved',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.primary.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w500,
+          // Course name + BLOCKED badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${course.code}  ${course.title}',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          // Override toggle
-          Column(
-            children: [
-              Switch(
-                value: isOverridden,
-                onChanged: onToggle,
-                activeThumbColor: AppColors.primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_creditStr(course.credit)} Credits',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(
-                isOverridden ? 'Override\nON' : 'Override\nOFF',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color:
-                      isOverridden ? AppColors.primary : AppColors.textSecondary,
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isOverridden
+                      ? AppColors.primary.withValues(alpha: 0.1)
+                      : AppColors.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isOverridden ? 'UNLOCKED' : 'BLOCKED',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isOverridden ? AppColors.primary : AppColors.danger,
+                  ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Missing prerequisite reason box
+          if (course.prerequisites.isNotEmpty && !isOverridden)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.cancel_outlined,
+                      size: 16, color: AppColors.danger),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '${course.prerequisites.join(", ")}  Not Completed',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.danger,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (isOverridden)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_open_rounded,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Prerequisite overridden — department approved',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary.withValues(alpha: 0.9),
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          if (!isOverridden) ...[
+            const SizedBox(height: AppSpacing.sm),
+            // Solution options
+            Text(
+              'SOLUTION OPTIONS:',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _SolutionItem(
+                index: 1,
+                text:
+                    'Retake ${course.prerequisites.join(", ")} first'),
+            _SolutionItem(
+                index: 2, text: 'Request department approval'),
+          ],
+
+          const SizedBox(height: AppSpacing.md),
+
+          // Enable / Disable Override button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => onToggle(!isOverridden),
+              style: OutlinedButton.styleFrom(
+                foregroundColor:
+                    isOverridden ? AppColors.danger : AppColors.primary,
+                side: BorderSide(
+                  color: isOverridden
+                      ? AppColors.danger.withValues(alpha: 0.4)
+                      : AppColors.primary.withValues(alpha: 0.4),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: Icon(
+                isOverridden
+                    ? Icons.lock_outline_rounded
+                    : Icons.lock_open_rounded,
+                size: 18,
+              ),
+              label: Text(
+                isOverridden ? 'Disable Override' : 'Enable Override',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
           ),
         ],
       ),
@@ -974,155 +1042,36 @@ class _BlockedCourseOverrideRow extends StatelessWidget {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Retake Schedule Row
-// ──────────────────────────────────────────────────────────────────────────────
+class _SolutionItem extends StatelessWidget {
+  final int index;
+  final String text;
 
-class _RetakeScheduleRow extends StatelessWidget {
-  final AcademicExceptionModel exception;
-  final int semesterNumber;
-  final bool isScheduled;
-  final ValueChanged<bool> onToggle;
-
-  const _RetakeScheduleRow({
-    required this.exception,
-    required this.semesterNumber,
-    required this.isScheduled,
-    required this.onToggle,
-  });
+  const _SolutionItem({required this.index, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.sm, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: isScheduled
-            ? const Color(0xFFFFFBEB) // warm amber tint when scheduled
-            : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isScheduled
-              ? const Color(0xFFFCD34D) // amber border
-              : AppColors.border,
-          width: isScheduled ? 1.5 : 1,
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Failed badge for original semester
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.danger.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'SEM',
-                  style: const TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.danger,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                Text(
-                  '${exception.originalSemester}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.danger,
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  'FAIL',
-                  style: const TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.danger,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
+          Text(
+            '$index  ',
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          // Course info
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${exception.courseId}: ${exception.courseName}',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(
-                      '${exception.credit % 1 == 0 ? exception.credit.toInt() : exception.credit} Credits',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    if (isScheduled) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFCD34D).withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '→ Retake in Sem $semesterNumber',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF92400E),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+            child: Text(
+              text,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
             ),
-          ),
-          // Toggle
-          Column(
-            children: [
-              Switch(
-                value: isScheduled,
-                onChanged: onToggle,
-                activeThumbColor: const Color(0xFFD97706),
-                activeTrackColor: const Color(0xFFFCD34D),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              Text(
-                isScheduled ? 'Retake\nSem $semesterNumber' : 'Skip\nFor Now',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: isScheduled
-                      ? const Color(0xFFD97706)
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ],
           ),
         ],
       ),
