@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/storage/hive_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../academic/data/sources/cse_curriculum_source.dart';
 import '../../academic/domain/curriculum_engine.dart';
 import '../../academic/providers/academic_provider.dart';
 import '../../academic_exception/domain/exception_engine.dart';
@@ -33,11 +35,19 @@ class DashboardScreen extends ConsumerWidget {
     final totalCurriculumCredits = CurriculumEngine().totalCreditForIntake(
       intake: intake,
     );
-    final remainingCredits = (totalCurriculumCredits - totalCredits).clamp(0.0, double.infinity);
+    final remainingCredits =
+        (totalCurriculumCredits - totalCredits).clamp(0.0, double.infinity);
 
     final degreeProgress = totalCurriculumCredits == 0
         ? 0.0
         : (totalCredits / totalCurriculumCredits).clamp(0.0, 1.0);
+
+    // Total semesters from curriculum
+    final totalSemesters =
+        CseCurriculumSource.getSemesters(intake: intake).length;
+    final completedSemesters = summary.completedSemesters;
+    final remainingSemesters =
+        (totalSemesters - completedSemesters).clamp(0, totalSemesters);
 
     final exceptions = ref.watch(academicExceptionsProvider);
     final runningSemester = currentSemester + 1;
@@ -48,63 +58,81 @@ class DashboardScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: const Color(0xFFF4F5FA),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
+            // ── Top App Bar ──────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: _AppBar(
+                department: department,
+                onReset: () async {
+                  await HiveService.clear();
+                  ref.invalidate(cgpaProvider);
+                  ref.invalidate(cgpaSummaryProvider);
+                  ref.invalidate(semesterResultsProvider);
+                  ref.invalidate(studentProvider);
+                  ref.invalidate(academicExceptionsProvider);
+                  if (!context.mounted) return;
+                  context.go('/auth');
+                },
+              ),
+            ),
+
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
-                AppSpacing.lg,
+                AppSpacing.sm,
                 AppSpacing.lg,
                 AppSpacing.md,
               ),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  _DashboardHeader(
-                    department: department,
-                    intake: intake,
-                    currentSemester: currentSemester,
-                    onReset: () async {
-                      await HiveService.clear();
-
-                      ref.invalidate(cgpaProvider);
-                      ref.invalidate(cgpaSummaryProvider);
-                      ref.invalidate(semesterResultsProvider);
-                      ref.invalidate(studentProvider);
-                      ref.invalidate(academicExceptionsProvider);
-
-                      if (!context.mounted) {
-                        return;
-                      }
-
-                      context.go('/auth');
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
+                  // ── Hero CGPA Card ──────────────────────────────────
                   CgpaCard(
                     summary: summary,
+                    degreeProgress: degreeProgress,
                     onTap: () => context.push('/cgpa-details'),
                   ),
+
                   const SizedBox(height: AppSpacing.md),
-                  _ProgressPanel(
+
+                  // ── Degree Progress Panel ───────────────────────────
+                  _DegreeProgressPanel(
+                    degreeProgress: degreeProgress,
+                    completedSemesters: completedSemesters,
+                    remainingSemesters: remainingSemesters,
                     completedCredits: totalCredits,
                     remainingCredits: remainingCredits,
-                    completedSemesters: summary.completedSemesters,
                     isRegular: isRegular,
-                    degreeProgress: degreeProgress,
                     totalCurriculumCredits: totalCurriculumCredits,
                   ),
+
                   const SizedBox(height: AppSpacing.md),
+
+                  // ── Latest Result Panel ─────────────────────────────
                   _LatestResultPanel(summary: summary),
+
                   const SizedBox(height: AppSpacing.md),
+
+                  // ── Next Semester Plan ──────────────────────────────
                   SemesterPlanPanel(plan: plan, intake: intake),
+
                   const SizedBox(height: AppSpacing.xl),
-                  Text('Academic Tools', style: AppTextStyles.headingMedium),
+
+                  // ── Academic Tools heading ──────────────────────────
+                  Text('Academic Tools',
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      )),
                   const SizedBox(height: AppSpacing.md),
                 ]),
               ),
             ),
+
+            // ── Academic Tools Grid ────────────────────────────────────
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
@@ -113,7 +141,8 @@ class DashboardScreen extends ConsumerWidget {
                 AppSpacing.xl,
               ),
               sliver: SliverGrid.count(
-                crossAxisCount: MediaQuery.sizeOf(context).width >= 620 ? 4 : 2,
+                crossAxisCount:
+                    MediaQuery.sizeOf(context).width >= 620 ? 4 : 2,
                 mainAxisSpacing: AppSpacing.md,
                 crossAxisSpacing: AppSpacing.md,
                 childAspectRatio: 1.02,
@@ -148,133 +177,87 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// App Bar
+// ─────────────────────────────────────────────────────────────────────────────
+class _AppBar extends StatelessWidget {
   final String department;
-  final String intake;
-  final int currentSemester;
   final Future<void> Function() onReset;
 
-  const _DashboardHeader({
-    required this.department,
-    required this.intake,
-    required this.currentSemester,
-    required this.onReset,
-  });
+  const _AppBar({required this.department, required this.onReset});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Academic Dashboard', style: AppTextStyles.headingMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text('$department - $intake', style: AppTextStyles.bodyMedium),
-              if (currentSemester > 0) ...[
-                const SizedBox(height: AppSpacing.xs),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+      child: Row(
+        children: [
+          // Profile avatar
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4648D4), Color(0xFF7C5CE8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            child: const Icon(Icons.person_rounded,
+                size: 22, color: Colors.white),
+          ),
+
+          // Centered title
+          Expanded(
+            child: Column(
+              children: [
                 Text(
-                  'Current semester $currentSemester',
-                  style: AppTextStyles.bodyMedium,
+                  'Academic Dashboard',
+                  style: GoogleFonts.outfit(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Text(
+                  department,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ],
-            ],
-          ),
-        ),
-        IconButton.filledTonal(
-          tooltip: 'Reset app data',
-          onPressed: onReset,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProgressPanel extends StatelessWidget {
-  final double completedCredits;
-  final double remainingCredits;
-  final int completedSemesters;
-  final bool isRegular;
-  final double degreeProgress;
-  final double totalCurriculumCredits;
-
-  const _ProgressPanel({
-    required this.completedCredits,
-    required this.remainingCredits,
-    required this.completedSemesters,
-    required this.isRegular,
-    required this.degreeProgress,
-    required this.totalCurriculumCredits,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: 'Completed Credits',
-                  value: completedCredits.toStringAsFixed(1),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _MetricTile(
-                  label: 'Remaining Credits',
-                  value: remainingCredits.toStringAsFixed(1),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: 'Completed Semesters',
-                  value: completedSemesters.toString(),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _MetricTile(
-                  label: 'Academic Track',
-                  value: isRegular ? 'Regular' : 'Irregular',
-                  valueColor: isRegular ? AppColors.success : AppColors.warning,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: degreeProgress,
-              minHeight: 9,
-              backgroundColor: AppColors.border,
-              color: AppColors.success,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            totalCurriculumCredits == 0
-                ? 'Curriculum progress will appear after intake data is available'
-                : '${(degreeProgress * 100).toStringAsFixed(0)}% of curriculum credits completed',
-            style: AppTextStyles.bodyMedium,
+
+          // Notification / Reset bell
+          GestureDetector(
+            onLongPress: onReset,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.07),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Icon(Icons.notifications_none_rounded,
+                  size: 20, color: AppColors.textPrimary),
+            ),
           ),
         ],
       ),
@@ -282,44 +265,269 @@ class _ProgressPanel extends StatelessWidget {
   }
 }
 
-class _MetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? valueColor;
+// ─────────────────────────────────────────────────────────────────────────────
+// Degree Progress Panel
+// ─────────────────────────────────────────────────────────────────────────────
+class _DegreeProgressPanel extends StatelessWidget {
+  final double degreeProgress;
+  final int completedSemesters;
+  final int remainingSemesters;
+  final double completedCredits;
+  final double remainingCredits;
+  final bool isRegular;
+  final double totalCurriculumCredits;
 
-  const _MetricTile({
-    required this.label,
-    required this.value,
-    this.valueColor,
+  const _DegreeProgressPanel({
+    required this.degreeProgress,
+    required this.completedSemesters,
+    required this.remainingSemesters,
+    required this.completedCredits,
+    required this.remainingCredits,
+    required this.isRegular,
+    required this.totalCurriculumCredits,
   });
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final percent = (degreeProgress * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.backgroundLight,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: AppTextStyles.bodyMedium),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              value,
-              style: AppTextStyles.headingMedium.copyWith(
-                color: valueColor ?? AppColors.textPrimary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Degree Progress',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'BACHELOR OF SCIENCE',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$percent%',
+                    style: GoogleFonts.outfit(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  Text(
+                    'OVERALL',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: degreeProgress,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFEEEFF8),
+              color: AppColors.primary,
             ),
-          ],
-        ),
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // Stats grid — Semesters
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: 'COMPLETED',
+                  value: '$completedSemesters Semesters',
+                  valueColor: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _StatTile(
+                  label: 'REMAINING',
+                  value: '$remainingSemesters Semesters',
+                  valueColor: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.sm),
+
+          // Stats grid — Credits
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  label: 'COMPLETED CREDITS',
+                  value: completedCredits.toStringAsFixed(1),
+                  valueColor: AppColors.primary,
+                  valueLarge: true,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _StatTile(
+                  label: 'REMAINING',
+                  value: remainingCredits.toStringAsFixed(0),
+                  valueColor: AppColors.textPrimary,
+                  valueLarge: true,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.sm),
+
+          // Academic Track row
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F5FA),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.verified_outlined,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Academic Track',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    isRegular ? 'Regular' : 'Irregular',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  final bool valueLarge;
+
+  const _StatTile({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+    this.valueLarge = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F5FA),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: valueLarge
+                ? GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor,
+                  )
+                : GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Latest Result Panel
+// ─────────────────────────────────────────────────────────────────────────────
 class _LatestResultPanel extends StatelessWidget {
   final CgpaSummary summary;
 
@@ -335,32 +543,50 @@ class _LatestResultPanel extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            backgroundColor: Color(0xFFE0F2FE),
-            foregroundColor: AppColors.secondary,
-            child: Icon(Icons.query_stats),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF0FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.query_stats_rounded,
+                color: AppColors.primary, size: 22),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Latest Result', style: AppTextStyles.bodyLarge),
-                const SizedBox(height: AppSpacing.xs),
+                Text('Latest Result',
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    )),
+                const SizedBox(height: 2),
                 Text(
                   latestSemester == null
                       ? 'No semester result saved yet'
-                      : 'Semester $latestSemester SGPA ${latestSgpa!.toStringAsFixed(2)}',
+                      : 'Semester $latestSemester  ·  SGPA ${latestSgpa!.toStringAsFixed(2)}',
                   style: AppTextStyles.bodyMedium,
                 ),
               ],
             ),
           ),
+          Icon(Icons.chevron_right_rounded,
+              color: AppColors.textSecondary, size: 20),
         ],
       ),
     );
