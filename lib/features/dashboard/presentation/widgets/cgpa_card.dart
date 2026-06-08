@@ -211,15 +211,9 @@ class CgpaCard extends ConsumerWidget {
 
                     const SizedBox(height: AppSpacing.md),
 
-                    // ── Mini trend chart ────────────────────────────────
-                    if (sgpaHistory.length >= 2) ...[
-                      SizedBox(
-                        height: 64,
-                        child: _MiniTrendChart(history: sgpaHistory),
-                      ),
-                      const SizedBox(height: 6),
-                      _SemesterAxisLabels(count: sgpaHistory.length),
-                    ],
+                    // ── Interactive trend chart ──────────────────────────
+                    if (sgpaHistory.length >= 2)
+                      _InteractiveTrendChart(history: sgpaHistory),
 
                     // ── Best performance card ───────────────────────────
                     if (bestSemester != null) ...[
@@ -379,42 +373,125 @@ class _ArcPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mini SGPA trend chart
+// Interactive SGPA Trend Chart
 // ─────────────────────────────────────────────────────────────────────────────
-class _MiniTrendChart extends StatelessWidget {
+
+/// Self-contained interactive trend chart.
+/// Drag or tap anywhere on the chart to snap the selection to the nearest
+/// semester point. A floating tooltip shows the SGPA; the axis label below
+/// highlights the active semester. Pointer-up clears the selection.
+class _InteractiveTrendChart extends StatefulWidget {
   final List<double> history;
-  const _MiniTrendChart({required this.history});
+  const _InteractiveTrendChart({required this.history});
+
+  @override
+  State<_InteractiveTrendChart> createState() => _InteractiveTrendChartState();
+}
+
+class _InteractiveTrendChartState extends State<_InteractiveTrendChart> {
+  int? _activeIndex; // null = no selection
+
+  void _updateFromLocal(Offset local, Size size) {
+    if (widget.history.length < 2) return;
+    final step = size.width / (widget.history.length - 1);
+    int nearest = (local.dx / step).round()
+        .clamp(0, widget.history.length - 1);
+    if (_activeIndex != nearest) setState(() => _activeIndex = nearest);
+  }
+
+  void _clearSelection() => setState(() => _activeIndex = null);
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _TrendPainter(history: history),
-      size: const Size(double.infinity, 64),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      const chartH = 72.0;
+      const labelH = 20.0;
+
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (d) => _updateFromLocal(d.localPosition, Size(w, chartH)),
+        onTapUp: (_) => _clearSelection(),
+        onPanStart: (d) => _updateFromLocal(d.localPosition, Size(w, chartH)),
+        onPanUpdate: (d) => _updateFromLocal(d.localPosition, Size(w, chartH)),
+        onPanEnd: (_) => _clearSelection(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Chart area
+            SizedBox(
+              height: chartH,
+              width: w,
+              child: CustomPaint(
+                painter: _InteractiveTrendPainter(
+                  history: widget.history,
+                  activeIndex: _activeIndex,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Axis labels
+            SizedBox(
+              height: labelH,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(widget.history.length, (i) {
+                  final isActive = _activeIndex == i;
+                  final isLast =
+                      i == widget.history.length - 1 && _activeIndex == null;
+                  return AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 180),
+                    style: GoogleFonts.inter(
+                      fontSize: isActive ? 11 : 10,
+                      fontWeight: (isActive || isLast)
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: isActive
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.45),
+                    ),
+                    child: Text('Sem ${i + 1}'),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
-class _TrendPainter extends CustomPainter {
+class _InteractiveTrendPainter extends CustomPainter {
   final List<double> history;
-  const _TrendPainter({required this.history});
+  final int? activeIndex;
+
+  const _InteractiveTrendPainter({
+    required this.history,
+    required this.activeIndex,
+  });
+
+  // Converts history values → canvas Offsets
+  List<Offset> _buildPoints(Size size) {
+    final minVal = history.reduce(math.min);
+    final maxVal = history.reduce(math.max);
+    final range = (maxVal - minVal).abs().clamp(0.2, 4.0);
+    return List.generate(history.length, (i) {
+      final x = history.length == 1
+          ? size.width / 2
+          : (i / (history.length - 1)) * size.width;
+      final norm = (history[i] - (minVal - 0.15)) / (range + 0.3);
+      final y = size.height - (norm * size.height * 0.75 + size.height * 0.1);
+      return Offset(x, y);
+    });
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     if (history.length < 2) return;
+    final pts = _buildPoints(size);
 
-    final minVal = history.reduce(math.min);
-    final maxVal = history.reduce(math.max);
-    final range = (maxVal - minVal).abs().clamp(0.2, 4.0);
-
-    List<Offset> pts = [];
-    for (int i = 0; i < history.length; i++) {
-      final x = (i / (history.length - 1)) * size.width;
-      final norm = (history[i] - (minVal - 0.15)) / (range + 0.3);
-      final y = size.height - (norm * size.height * 0.75 + size.height * 0.1);
-      pts.add(Offset(x, y));
-    }
-
-    // Gradient fill
+    // ── Gradient fill ───────────────────────────────────────────────────────
     final fillPath = Path()
       ..moveTo(pts.first.dx, size.height)
       ..lineTo(pts.first.dx, pts.first.dy);
@@ -435,14 +512,14 @@ class _TrendPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.white.withValues(alpha: 0.28),
+            Colors.white.withValues(alpha: activeIndex != null ? 0.15 : 0.28),
             Colors.white.withValues(alpha: 0.0),
           ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
         ..style = PaintingStyle.fill,
     );
 
-    // Line
+    // ── Line ────────────────────────────────────────────────────────────────
     final linePath = Path()..moveTo(pts.first.dx, pts.first.dy);
     for (int i = 0; i < pts.length - 1; i++) {
       final cp1 = Offset((pts[i].dx + pts[i + 1].dx) / 2, pts[i].dy);
@@ -453,58 +530,150 @@ class _TrendPainter extends CustomPainter {
     canvas.drawPath(
       linePath,
       Paint()
-        ..color = Colors.white
+        ..color = Colors.white.withValues(
+            alpha: activeIndex != null ? 0.55 : 1.0)
         ..strokeWidth = 2.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );
 
-    // Dots
+    // ── Default dots ────────────────────────────────────────────────────────
     for (int i = 0; i < pts.length; i++) {
-      final p = pts[i];
-      final isLast = i == pts.length - 1;
-      canvas.drawCircle(p, isLast ? 5 : 3,
-          Paint()..color = Colors.white..style = PaintingStyle.fill);
-      if (isLast) {
+      if (activeIndex == i) continue; // drawn later
+      final isLast = i == pts.length - 1 && activeIndex == null;
+      canvas.drawCircle(
+        pts[i],
+        isLast ? 5 : 3,
+        Paint()
+          ..color = Colors.white.withValues(
+              alpha: activeIndex != null ? 0.35 : 1.0)
+          ..style = PaintingStyle.fill,
+      );
+      if (isLast && activeIndex == null) {
         canvas.drawCircle(
-            p,
-            8,
-            Paint()
-              ..color = Colors.white.withValues(alpha: 0.25)
-              ..style = PaintingStyle.fill);
+          pts[i],
+          8,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.20)
+            ..style = PaintingStyle.fill,
+        );
       }
+    }
+
+    // ── Active selection ────────────────────────────────────────────────────
+    if (activeIndex != null) {
+      final ai = activeIndex!;
+      final ap = pts[ai];
+      final sgpa = history[ai];
+
+      // Vertical dashed indicator line
+      const dashH = 5.0;
+      const gap = 3.0;
+      double y = 0;
+      final dashPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.50)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+      while (y < size.height) {
+        canvas.drawLine(Offset(ap.dx, y),
+            Offset(ap.dx, math.min(y + dashH, size.height)), dashPaint);
+        y += dashH + gap;
+      }
+
+      // Glow ring
+      canvas.drawCircle(
+        ap,
+        14,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.12)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        ap,
+        9,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.22)
+          ..style = PaintingStyle.fill,
+      );
+      // Active dot
+      canvas.drawCircle(
+        ap,
+        5,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill,
+      );
+
+      // ── Floating tooltip ────────────────────────────────────────────────
+      const tooltipPadH = 10.0;
+      const tooltipPadV = 6.0;
+      final label = 'Sem ${ai + 1}  ·  ${sgpa.toStringAsFixed(2)}';
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final tW = textPainter.width + tooltipPadH * 2;
+      final tH = textPainter.height + tooltipPadV * 2;
+      const arrowH = 5.0;
+      const tipY = 8.0; // gap above dot
+
+      // Box position — clamp so it never overflows left/right
+      double boxLeft = ap.dx - tW / 2;
+      boxLeft = boxLeft.clamp(0.0, size.width - tW);
+      final boxTop = ap.dy - tH - arrowH - tipY;
+
+      // Tooltip rounded rect
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(boxLeft, boxTop, tW, tH),
+        const Radius.circular(8),
+      );
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.22)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.45)
+          ..strokeWidth = 1
+          ..style = PaintingStyle.stroke,
+      );
+
+      // Arrow pointer
+      final arrowTipX = ap.dx.clamp(boxLeft + 10, boxLeft + tW - 10);
+      final arrowPath = Path()
+        ..moveTo(arrowTipX - 5, boxTop + tH)
+        ..lineTo(arrowTipX, boxTop + tH + arrowH)
+        ..lineTo(arrowTipX + 5, boxTop + tH)
+        ..close();
+      canvas.drawPath(
+          arrowPath,
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.22)
+            ..style = PaintingStyle.fill);
+
+      // Text
+      textPainter.paint(
+        canvas,
+        Offset(boxLeft + tooltipPadH, boxTop + tooltipPadV),
+      );
     }
   }
 
   @override
-  bool shouldRepaint(_TrendPainter old) => old.history != history;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Semester axis labels
-// ─────────────────────────────────────────────────────────────────────────────
-class _SemesterAxisLabels extends StatelessWidget {
-  final int count;
-  const _SemesterAxisLabels({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(count, (i) {
-        final isLast = i == count - 1;
-        return Text(
-          'Sem ${i + 1}',
-          style: GoogleFonts.inter(
-            fontSize: 10,
-            fontWeight: isLast ? FontWeight.w700 : FontWeight.w400,
-            color: isLast
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.45),
-          ),
-        );
-      }),
-    );
-  }
+  bool shouldRepaint(_InteractiveTrendPainter old) =>
+      old.history != history || old.activeIndex != activeIndex;
 }

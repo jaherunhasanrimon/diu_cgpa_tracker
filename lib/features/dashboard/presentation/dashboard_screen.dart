@@ -238,26 +238,79 @@ class _AppBar extends StatelessWidget {
             ),
           ),
 
-          // Notification / Reset bell
-          GestureDetector(
-            onLongPress: onReset,
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.07),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  )
-                ],
+          // Right side: bell + reset
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Notification bell (decorative)
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.notifications_none_rounded,
+                    size: 20, color: AppColors.textPrimary),
               ),
-              child: Icon(Icons.notifications_none_rounded,
-                  size: 20, color: AppColors.textPrimary),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              // Reset button
+              Tooltip(
+                message: 'Reset all app data',
+                child: GestureDetector(
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Reset App Data'),
+                        content: const Text(
+                          'This will erase all saved semester results and registration data. Continue?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.danger,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Reset'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) await onReset();
+                  },
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.07),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(Icons.restart_alt_rounded,
+                        size: 20, color: AppColors.textSecondary),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
