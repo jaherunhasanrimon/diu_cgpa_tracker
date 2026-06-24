@@ -58,6 +58,13 @@ abstract interface class IAuthRepository {
 
   /// Permanently deletes all auth data. Called on full app reset.
   Future<void> deleteAccount();
+
+  /// Updates the current user's profile with registration details.
+  Future<UserModel> updateProfile({
+    required String studentId,
+    required String department,
+    required bool profileCompleted,
+  });
 }
 
 // ── Local Implementation ──────────────────────────────────────────────────────
@@ -175,6 +182,28 @@ class LocalAuthRepository implements IAuthRepository {
     await HiveService.box.delete(_hashKey);
     // Also clean up legacy key if present.
     await HiveService.box.delete('auth_user');
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    required String studentId,
+    required String department,
+    required bool profileCompleted,
+  }) async {
+    final user = getCurrentUser();
+    if (user == null) {
+      throw const AuthException(
+        message: 'No user is currently signed in.',
+        code: 'no-user',
+      );
+    }
+    final updatedUser = user.copyWith(
+      studentId: studentId,
+      department: department,
+      profileCompleted: profileCompleted,
+    );
+    await HiveService.box.put(_userKey, updatedUser.toMap());
+    return updatedUser;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
