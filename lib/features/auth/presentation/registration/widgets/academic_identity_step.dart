@@ -7,11 +7,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../academic/domain/curriculum_engine.dart';
 import '../../../providers/registration_provider.dart';
 
-class AcademicIdentityStep extends ConsumerWidget {
+class AcademicIdentityStep extends ConsumerStatefulWidget {
   const AcademicIdentityStep({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AcademicIdentityStep> createState() =>
+      _AcademicIdentityStepState();
+}
+
+class _AcademicIdentityStepState extends ConsumerState<AcademicIdentityStep> {
+  late final TextEditingController _studentIdController;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialId = ref.read(registrationProvider).studentId;
+    _studentIdController = TextEditingController(text: initialId);
+  }
+
+  @override
+  void dispose() {
+    _studentIdController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final data = ref.watch(registrationProvider);
     final notifier = ref.read(registrationProvider.notifier);
     final supportedIntakes = CurriculumEngine().supportedIntakes();
@@ -19,7 +40,6 @@ class AcademicIdentityStep extends ConsumerWidget {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
           Text(
             'Tell us about your academic structure.',
@@ -27,6 +47,20 @@ class AcademicIdentityStep extends ConsumerWidget {
           ),
 
           const SizedBox(height: AppSpacing.xl),
+
+          TextFormField(
+            controller: _studentIdController,
+            decoration: const InputDecoration(
+              labelText: 'Student ID',
+              border: OutlineInputBorder(),
+              hintText: 'e.g. 201-15-12345',
+            ),
+            onChanged: (value) {
+              notifier.setStudentId(value.trim());
+            },
+          ),
+
+          const SizedBox(height: AppSpacing.lg),
 
           DropdownButtonFormField<String>(
             initialValue: data.department.isEmpty ? null : data.department,

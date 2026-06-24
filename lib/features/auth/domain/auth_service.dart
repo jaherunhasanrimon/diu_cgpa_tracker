@@ -32,11 +32,11 @@ class AuthService {
   AuthStatus resolveInitialStatus() {
     final user = _authRepository.getCurrentUser();
     if (user == null) return AuthStatus.unauthenticated;
-    return _profileStatus();
+    return _profileStatus(user);
   }
 
   /// Determines the [AuthStatus] for an already-authenticated [user].
-  AuthStatus resolveStatusForUser(UserModel user) => _profileStatus();
+  AuthStatus resolveStatusForUser(UserModel user) => _profileStatus(user);
 
   // ── Auth operations ───────────────────────────────────────────────────────
 
@@ -63,9 +63,24 @@ class AuthService {
   /// Permanently deletes the auth account (full app reset).
   Future<void> deleteAccount() => _authRepository.deleteAccount();
 
+  /// Updates the current user's profile with registration details.
+  Future<UserModel> updateProfile({
+    required String studentId,
+    required String department,
+    required bool profileCompleted,
+  }) =>
+      _authRepository.updateProfile(
+        studentId: studentId,
+        department: department,
+        profileCompleted: profileCompleted,
+      );
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  AuthStatus _profileStatus() => _studentRepository.hasStudent()
-      ? AuthStatus.authenticatedWithProfile
-      : AuthStatus.authenticatedWithoutProfile;
+  AuthStatus _profileStatus(UserModel user) {
+    if (user.profileCompleted || _studentRepository.hasStudent()) {
+      return AuthStatus.authenticatedWithProfile;
+    }
+    return AuthStatus.authenticatedWithoutProfile;
+  }
 }

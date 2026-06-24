@@ -12,6 +12,7 @@ class RegistrationState {
   final String university;
   final String name;
   final String email;
+  final String studentId;
 
   final String department;
   final String admissionTerm;
@@ -30,15 +31,12 @@ class RegistrationState {
     this.university = '',
     this.name = '',
     this.email = '',
-
+    this.studentId = '',
     this.department = '',
     this.admissionTerm = '',
     this.year = '',
-
     this.completedSemester = 0,
-
     this.results = const [],
-
     this.sgpaHistory = const {},
     this.isRegular = true,
     this.exceptions = const [],
@@ -48,13 +46,11 @@ class RegistrationState {
     String? university,
     String? name,
     String? email,
-
+    String? studentId,
     String? department,
     String? admissionTerm,
     String? year,
-
     int? completedSemester,
-
     List<SemesterResultModel>? results,
     Map<int, double>? sgpaHistory,
     bool? isRegular,
@@ -64,14 +60,11 @@ class RegistrationState {
       university: university ?? this.university,
       name: name ?? this.name,
       email: email ?? this.email,
-
+      studentId: studentId ?? this.studentId,
       department: department ?? this.department,
       admissionTerm: admissionTerm ?? this.admissionTerm,
-
       year: year ?? this.year,
-
       completedSemester: completedSemester ?? this.completedSemester,
-
       results: results ?? this.results,
       sgpaHistory: sgpaHistory ?? this.sgpaHistory,
       isRegular: isRegular ?? this.isRegular,
@@ -111,15 +104,21 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
     );
   }
 
+  void setStudentId(String studentId) {
+    state = state.copyWith(studentId: studentId);
+  }
+
   void setAcademicInfo({
     required String department,
     required String admissionTerm,
     required int completedSemester,
+    String? studentId,
   }) {
     final nextState = state.copyWith(
       department: department,
       admissionTerm: admissionTerm,
       completedSemester: completedSemester,
+      studentId: studentId ?? state.studentId,
     );
 
     state = nextState.copyWith(
@@ -301,6 +300,7 @@ class RegistrationNotifier extends StateNotifier<RegistrationState> {
       university: state.university,
       name: state.name,
       email: state.email,
+      studentId: state.studentId,
 
       department: state.department,
       admissionTerm: state.admissionTerm,

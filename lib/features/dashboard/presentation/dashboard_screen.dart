@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/storage/hive_service.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -25,7 +26,10 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(cgpaSummaryProvider);
     final student = ref.watch(studentProvider);
+    final authState = ref.watch(authProvider);
 
+    final userName = authState.user?.name ?? 'Student';
+    final studentId = authState.user?.studentId ?? '';
     final department = student?['department']?.toString() ?? 'CSE';
     final intake = student?['intake']?.toString() ?? 'Unknown intake';
     final currentSemester = (student?['semester'] as num?)?.toInt() ?? 0;
@@ -65,16 +69,19 @@ class DashboardScreen extends ConsumerWidget {
             // ── Top App Bar ──────────────────────────────────────────────
             SliverToBoxAdapter(
               child: _AppBar(
+                userName: userName,
+                studentId: studentId,
                 department: department,
                 onReset: () async {
                   await HiveService.clear();
+                  // deleteAccount() sets status → unauthenticated.
+                  // RouterNotifier will redirect to /auth automatically.
+                  await ref.read(authProvider.notifier).deleteAccount();
                   ref.invalidate(cgpaProvider);
                   ref.invalidate(cgpaSummaryProvider);
                   ref.invalidate(semesterResultsProvider);
                   ref.invalidate(studentProvider);
                   ref.invalidate(academicExceptionsProvider);
-                  if (!context.mounted) return;
-                  context.go('/auth');
                 },
               ),
             ),
@@ -181,10 +188,17 @@ class DashboardScreen extends ConsumerWidget {
 // App Bar
 // ─────────────────────────────────────────────────────────────────────────────
 class _AppBar extends StatelessWidget {
+  final String userName;
+  final String studentId;
   final String department;
   final Future<void> Function() onReset;
 
-  const _AppBar({required this.department, required this.onReset});
+  const _AppBar({
+    required this.userName,
+    required this.studentId,
+    required this.department,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +232,7 @@ class _AppBar extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  'Academic Dashboard',
+                  userName,
                   style: GoogleFonts.outfit(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -226,7 +240,7 @@ class _AppBar extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  department,
+                  studentId.isNotEmpty ? '$department · $studentId' : department,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,

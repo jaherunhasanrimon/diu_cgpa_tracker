@@ -5,6 +5,7 @@ class RegistrationModel {
   final String university;
   final String name;
   final String email;
+  final String studentId;
 
   final String department;
   final String admissionTerm;
@@ -23,7 +24,7 @@ class RegistrationModel {
     required this.university,
     required this.name,
     required this.email,
-
+    required this.studentId,
     required this.department,
     required this.admissionTerm,
     required this.year,
@@ -42,6 +43,7 @@ class RegistrationModel {
       'university': university,
       'name': name,
       'email': email,
+      'studentId': studentId,
 
       'department': department,
       'admissionTerm': admissionTerm,
@@ -66,6 +68,7 @@ class RegistrationModel {
       university: data['university'] ?? '',
       name: data['name'] ?? '',
       email: data['email'] ?? '',
+      studentId: data['studentId'] ?? '',
 
       department: data['department'] ?? '',
       admissionTerm: data['admissionTerm'] ?? '',

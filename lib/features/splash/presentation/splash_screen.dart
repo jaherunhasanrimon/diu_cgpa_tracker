@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../academic/repository/student_repository.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,36 +15,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-
     _initializeApp();
   }
 
   Future<void> _initializeApp() async {
-
-    await Future.delayed(
-      const Duration(seconds: 2),
-    );
-
+    // Wait for branding splash to display.
+    await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    final repository = StudentRepository();
-
-    final exists = repository.hasStudent();
-
-    if (exists) {
-
-      context.go(
-        '/dashboard',
-      );
-
-    } else {
-
-      context.go(
-        '/onboarding',
-      );
-
-    }
-
+    // Navigate to the auth gate. RouterNotifier's redirect will intercept
+    // and send the user to the correct destination based on AuthStatus:
+    //   • unauthenticated           → stays on /auth (gate)
+    //   • authenticatedWithoutProfile → /register-wizard
+    //   • authenticatedWithProfile    → /dashboard
+    context.go('/auth');
   }
 
   @override

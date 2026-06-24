@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../academic/repository/student_repository.dart';
@@ -16,6 +15,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/primary_button.dart';
 
 import '../../providers/registration_provider.dart';
+import '../../providers/auth_provider.dart';
 
 import 'widgets/academic_identity_step.dart' as identity_step;
 import 'widgets/semester_progress_step.dart' as semester_step;
@@ -175,9 +175,10 @@ class _RegistrationWizardScreenState
                       if (safeStep == 0) {
                         if (data.department.isEmpty ||
                             data.admissionTerm.isEmpty ||
-                            data.completedSemester == 0) {
+                            data.completedSemester == 0 ||
+                            data.studentId.isEmpty) {
                           _showSnack(
-                              'Please complete academic information');
+                              'Please complete academic information including Student ID');
                           return;
                         }
                       }
@@ -221,7 +222,14 @@ class _RegistrationWizardScreenState
                         ref.invalidate(academicExceptionsProvider);
 
                         if (!context.mounted) return;
-                        context.go('/dashboard');
+                        // Signal profile completion — RouterNotifier will
+                        // redirect to /dashboard automatically.
+                        await ref
+                            .read(authProvider.notifier)
+                            .markProfileComplete(
+                              studentId: data.studentId,
+                              department: data.department,
+                            );
                       } else {
                         setState(() => currentStep = safeStep + 1);
                       }
