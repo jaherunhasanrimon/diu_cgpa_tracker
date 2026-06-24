@@ -19,6 +19,8 @@ class HiveService {
 
   static Box get box => _box;
 
+  static set box(Box val) => _box = val;
+
 
 
   static Future<void> clear() async {
