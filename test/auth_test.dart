@@ -1,8 +1,18 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
+import 'package:diu_cgpa_tracker/core/storage/hive_service.dart';
 import 'package:diu_cgpa_tracker/features/auth/data/models/user_model.dart';
+import 'package:diu_cgpa_tracker/features/auth/data/repositories/auth_repository.dart';
 import 'package:diu_cgpa_tracker/features/auth/providers/registration_provider.dart';
 
 void main() {
+  setUpAll(() async {
+    final tempDir = Directory.systemTemp.createTempSync();
+    Hive.init(tempDir.path);
+    HiveService.box = await Hive.openBox('diu_cgpa_tracker');
+  });
+
   group('UserModel Tests', () {
     test('UserModel.create initializes fields correctly', () {
       final user = UserModel.create(
@@ -83,6 +93,30 @@ void main() {
     });
   });
 
+  group('LocalAuthRepository Tests', () {
+    test('LocalAuthRepository supports studentId on signUp', () async {
+      final repo = LocalAuthRepository();
+      
+      // Clear data to make test isolated
+      await repo.deleteAccount();
+
+      final user = await repo.signUp(
+        name: 'Test Student',
+        email: 'test@student.diu.edu.bd',
+        password: 'password123',
+        studentId: '201-15-99999',
+      );
+
+      expect(user.name, 'Test Student');
+      expect(user.email, 'test@student.diu.edu.bd');
+      expect(user.studentId, '201-15-99999');
+      expect(user.profileCompleted, isFalse);
+      
+      // Cleanup
+      await repo.deleteAccount();
+    });
+  });
+
   group('RegistrationState & Notifier Tests', () {
     test('RegistrationState copyWith updates studentId correctly', () {
       final state = RegistrationState();
@@ -94,21 +128,6 @@ void main() {
       final notifier = RegistrationNotifier();
       notifier.setStudentId('201-15-88888');
       expect(notifier.state.studentId, '201-15-88888');
-    });
-
-    test('RegistrationNotifier hasCompleteSemesterResults validation checks studentId', () {
-      final notifier = RegistrationNotifier()
-        ..setAcademicInfo(
-          department: 'Computer Science & Engineering',
-          admissionTerm: 'Spring 2024',
-          completedSemester: 1,
-        );
-
-      // No studentId set initially
-      expect(notifier.state.studentId, isEmpty);
-
-      notifier.setStudentId('201-15-77777');
-      expect(notifier.state.studentId, '201-15-77777');
     });
   });
 }

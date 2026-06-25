@@ -55,6 +55,17 @@ class _RegistrationWizardScreenState
   @override
   Widget build(BuildContext context) {
     final regState = ref.watch(registrationProvider);
+    final authUser = ref.watch(authProvider).user;
+    if (authUser != null &&
+        authUser.studentId.isNotEmpty &&
+        regState.studentId.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(registrationProvider.notifier)
+            .setStudentId(authUser.studentId);
+      });
+    }
+
     final effectiveIndices = _effectiveIndices(regState.isRegular);
     final totalSteps = effectiveIndices.length;
 

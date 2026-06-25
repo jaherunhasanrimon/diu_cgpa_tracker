@@ -19,11 +19,13 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameFocus = FocusNode();
+  final _studentIdFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
 
   final _nameCtrl = TextEditingController();
+  final _studentIdCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -35,10 +37,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     _nameFocus.dispose();
+    _studentIdFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
     _nameCtrl.dispose();
+    _studentIdCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
@@ -49,16 +53,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // Only mutates AuthState — no navigation here.
-    // RouterNotifier redirect handles routing when status → authenticatedWithoutProfile.
     await ref.read(authProvider.notifier).signUp(
           name: _nameCtrl.text,
           email: _emailCtrl.text,
           password: _passwordCtrl.text,
+          studentId: _studentIdCtrl.text,
         );
 
     if (mounted) setState(() => _isLoading = false);
-    // Errors surface via ref.listen in build().
   }
 
   void _showError(String message) {
@@ -74,7 +76,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen for auth errors — navigation is handled by RouterNotifier.
     ref.listen<AuthState>(authProvider, (previous, next) {
       final newError = next.errorMessage;
       if (newError != null && newError != previous?.errorMessage) {
@@ -100,12 +101,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppSpacing.md),
 
                 // ── Header ───────────────────────────────────────────────
-                Text('Create Account', style: AppTextStyles.headingLarge)
+                Text(
+                  'Create Account',
+                  style: GoogleFonts.outfit(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                )
                     .animate()
                     .fadeIn(duration: 400.ms)
                     .slideY(begin: 0.2, end: 0),
@@ -113,11 +121,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: AppSpacing.xs),
 
                 Text(
-                  'Set up your account to get started.',
-                  style: AppTextStyles.bodyMedium,
+                  'Sign up with your details to get started. Academic details will be completed next.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
 
-                const SizedBox(height: AppSpacing.xxl),
+                const SizedBox(height: AppSpacing.xl),
 
                 // ── Name ─────────────────────────────────────────────────
                 _FieldLabel('Full Name'),
@@ -125,7 +137,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 _AuthField(
                   controller: _nameCtrl,
                   focusNode: _nameFocus,
-                  nextFocus: _emailFocus,
+                  nextFocus: _studentIdFocus,
                   hintText: 'e.g. Jahirun Hassan',
                   prefixIcon: Icons.person_outline_rounded,
                   textCapitalization: TextCapitalization.words,
@@ -136,6 +148,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     return null;
                   },
                 ).animate(delay: 150.ms).fadeIn(duration: 350.ms),
+
+                const SizedBox(height: AppSpacing.md),
+
+                // ── Student ID ───────────────────────────────────────────
+                _FieldLabel('DIU Student ID'),
+                const SizedBox(height: AppSpacing.xs),
+                _AuthField(
+                  controller: _studentIdCtrl,
+                  focusNode: _studentIdFocus,
+                  nextFocus: _emailFocus,
+                  hintText: 'e.g. 201-15-12345',
+                  prefixIcon: Icons.badge_outlined,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Please enter your student ID';
+                    }
+                    return null;
+                  },
+                ).animate(delay: 200.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.md),
 
@@ -160,7 +191,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     }
                     return null;
                   },
-                ).animate(delay: 200.ms).fadeIn(duration: 350.ms),
+                ).animate(delay: 250.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.md),
 
@@ -190,7 +221,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     if (v.length < 8) return 'Password must be at least 8 characters';
                     return null;
                   },
-                ).animate(delay: 250.ms).fadeIn(duration: 350.ms),
+                ).animate(delay: 300.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.md),
 
@@ -221,13 +252,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     if (v != _passwordCtrl.text) return 'Passwords do not match';
                     return null;
                   },
-                ).animate(delay: 300.ms).fadeIn(duration: 350.ms),
+                ).animate(delay: 350.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.xxl),
 
                 // ── Submit ───────────────────────────────────────────────
                 SizedBox(
-                  width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _submit,
@@ -258,7 +288,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             ),
                           ),
                   ),
-                ).animate(delay: 350.ms).fadeIn(duration: 350.ms),
+                ).animate(delay: 400.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.lg),
 
@@ -282,7 +312,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                     ),
                   ),
-                ).animate(delay: 400.ms).fadeIn(duration: 350.ms),
+                ).animate(delay: 450.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.xl),
               ],
@@ -294,7 +324,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
-// ── Shared field label ────────────────────────────────────────────────────────
 class _FieldLabel extends StatelessWidget {
   final String text;
   const _FieldLabel(this.text);
@@ -312,7 +341,6 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-// ── Shared text field ─────────────────────────────────────────────────────────
 class _AuthField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;

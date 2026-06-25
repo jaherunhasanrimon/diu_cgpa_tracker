@@ -46,8 +46,14 @@ class AuthService {
     required String name,
     required String email,
     required String password,
+    required String studentId,
   }) =>
-      _authRepository.signUp(name: name, email: email, password: password);
+      _authRepository.signUp(
+        name: name,
+        email: email,
+        password: password,
+        studentId: studentId,
+      );
 
   /// Verifies credentials. Returns the signed-in [UserModel].
   /// Throws [AuthException] on failure.
@@ -56,6 +62,13 @@ class AuthService {
     required String password,
   }) =>
       _authRepository.signIn(email: email, password: password);
+
+  /// Authenticates using Google Sign-In.
+  Future<UserModel> signInWithGoogle() => _authRepository.signInWithGoogle();
+
+  /// Requests a password reset link.
+  Future<void> sendPasswordResetEmail(String email) =>
+      _authRepository.sendPasswordResetEmail(email);
 
   /// Ends the current session.
   Future<void> signOut() => _authRepository.signOut();

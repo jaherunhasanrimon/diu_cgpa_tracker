@@ -93,11 +93,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String name,
     required String email,
     required String password,
+    required String studentId,
   }) async {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
     try {
-      final user =
-          await _service.signUp(name: name, email: email, password: password);
+      final user = await _service.signUp(
+        name: name,
+        email: email,
+        password: password,
+        studentId: studentId,
+      );
       state = AuthState(
         status: AuthStatus.authenticatedWithoutProfile,
         user: user,
@@ -111,6 +116,46 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         errorMessage: 'An unexpected error occurred. Please try again.',
+      );
+    }
+  }
+
+  /// Signs in using Google.
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      final user = await _service.signInWithGoogle();
+      final resolvedStatus = _service.resolveStatusForUser(user);
+      state = AuthState(status: resolvedStatus, user: user);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: e.message,
+      );
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'Google Sign-In failed. Please try again.',
+      );
+    }
+  }
+
+  /// Sends a password reset request email.
+  Future<void> sendPasswordReset(String email) async {
+    state = state.copyWith(status: AuthStatus.loading, clearError: true);
+    try {
+      await _service.sendPasswordResetEmail(email);
+      // Return to unauthenticated status but clear error state
+      state = state.copyWith(status: AuthStatus.unauthenticated, clearError: true);
+    } on AuthException catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: e.message,
+      );
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: 'Password reset request failed. Please try again.',
       );
     }
   }

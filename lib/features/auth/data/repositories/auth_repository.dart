@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/storage/hive_service.dart';
 import '../models/user_model.dart';
@@ -43,6 +46,7 @@ abstract interface class IAuthRepository {
     required String name,
     required String email,
     required String password,
+    required String studentId,
   });
 
   /// Verifies credentials and returns the signed-in [UserModel].
@@ -51,6 +55,12 @@ abstract interface class IAuthRepository {
     required String email,
     required String password,
   });
+
+  /// Signs in with Google credentials.
+  Future<UserModel> signInWithGoogle();
+
+  /// Sends a password reset link to the given [email].
+  Future<void> sendPasswordResetEmail(String email);
 
   /// Ends the current session. For local auth this is a no-op (Hive data stays).
   /// For Firebase this calls `FirebaseAuth.instance.signOut()`.
@@ -115,6 +125,7 @@ class LocalAuthRepository implements IAuthRepository {
     required String name,
     required String email,
     required String password,
+    required String studentId,
   }) async {
     if (HiveService.box.containsKey(_userKey) ||
         HiveService.box.containsKey('auth_user')) {
@@ -124,13 +135,34 @@ class LocalAuthRepository implements IAuthRepository {
       );
     }
 
-    final user = UserModel.create(name: name, email: email);
+    final user = UserModel(
+      uid: const Uuid().v4(),
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      studentId: studentId.trim(),
+      department: '',
+      profileCompleted: false,
+      createdAt: DateTime.now(),
+    );
     await HiveService.box.put(_userKey, user.toMap());
     await HiveService.box.put(_hashKey, {
       'email': user.email,
       'hash': _hashPassword(password),
     });
     return user;
+  }
+
+  @override
+  Future<UserModel> signInWithGoogle() async {
+    throw const AuthException(
+      message: 'Google login is not supported in local mock authentication.',
+      code: 'unsupported-operation',
+    );
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    // No-op for local mock
   }
 
   @override
@@ -216,5 +248,254 @@ class LocalAuthRepository implements IAuthRepository {
       'email': legacy['email'] as String? ?? '',
       'hash': legacy['passwordHash'] as String? ?? '',
     };
+  }
+}
+
+// ── Firebase Implementation ───────────────────────────────────────────────────
+
+/// Firebase Auth backed implementation of [IAuthRepository].
+///
+/// Data layout:
+///   - Firebase Auth keeps care of core user authentication (UID, display name, email).
+///   - Custom student fields ([studentId], [department], [profileCompleted]) are cached
+///     locally in the single `diu_cgpa_tracker` Hive box keyed by `auth_v2_user` for instant access.
+class FirebaseAuthRepository implements IAuthRepository {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  static const _userKey = 'auth_v2_user';
+
+  @override
+  UserModel? getCurrentUser() {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) return null;
+
+    final cachedData = HiveService.box.get(_userKey);
+    if (cachedData != null) {
+      final user = UserModel.fromMap(cachedData as Map);
+      if (user.uid == firebaseUser.uid) {
+        return user;
+      }
+    }
+
+    return UserModel(
+      uid: firebaseUser.uid,
+      name: firebaseUser.displayName ?? '',
+      email: firebaseUser.email ?? '',
+      studentId: '',
+      department: '',
+      profileCompleted: false,
+      createdAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
+    );
+  }
+
+  @override
+  Future<UserModel> signUp({
+    required String name,
+    required String email,
+    required String password,
+    required String studentId,
+  }) async {
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+
+      final firebaseUser = credential.user!;
+      await firebaseUser.updateDisplayName(name.trim());
+
+      final user = UserModel(
+        uid: firebaseUser.uid,
+        name: name.trim(),
+        email: firebaseUser.email ?? email.trim().toLowerCase(),
+        studentId: studentId.trim(),
+        department: '',
+        profileCompleted: false,
+        createdAt: DateTime.now(),
+      );
+
+      await HiveService.box.put(_userKey, user.toMap());
+      return user;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(
+        message: e.message ?? 'Registration failed.',
+        code: e.code,
+      );
+    } catch (e) {
+      throw AuthException(
+        message: 'An unexpected registration error occurred: ${e.toString()}',
+        code: 'unknown',
+      );
+    }
+  }
+
+  @override
+  Future<UserModel> signIn({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+
+      final firebaseUser = credential.user!;
+
+      final cachedData = HiveService.box.get(_userKey);
+      if (cachedData != null) {
+        final user = UserModel.fromMap(cachedData as Map);
+        if (user.uid == firebaseUser.uid) {
+          return user;
+        }
+      }
+
+      final user = UserModel(
+        uid: firebaseUser.uid,
+        name: firebaseUser.displayName ?? '',
+        email: firebaseUser.email ?? '',
+        studentId: '',
+        department: '',
+        profileCompleted: false,
+        createdAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
+      );
+      await HiveService.box.put(_userKey, user.toMap());
+      return user;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(
+        message: e.message ?? 'Invalid email or password.',
+        code: e.code,
+      );
+    } catch (e) {
+      throw AuthException(
+        message: 'An unexpected login error occurred: ${e.toString()}',
+        code: 'unknown',
+      );
+    }
+  }
+
+  @override
+  Future<UserModel> signInWithGoogle() async {
+    try {
+      final googleSignIn = GoogleSignIn();
+      final googleAccount = await googleSignIn.signIn();
+
+      if (googleAccount == null) {
+        throw const AuthException(
+          message: 'Google Sign-In was cancelled by the user.',
+          code: 'sign-in-cancelled',
+        );
+      }
+
+      final googleAuth = await googleAccount.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+      final firebaseUser = userCredential.user!;
+
+      final cachedData = HiveService.box.get(_userKey);
+      if (cachedData != null) {
+        final user = UserModel.fromMap(cachedData as Map);
+        if (user.uid == firebaseUser.uid) {
+          return user;
+        }
+      }
+
+      final user = UserModel(
+        uid: firebaseUser.uid,
+        name: firebaseUser.displayName ?? '',
+        email: firebaseUser.email ?? '',
+        studentId: '',
+        department: '',
+        profileCompleted: false,
+        createdAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
+      );
+      await HiveService.box.put(_userKey, user.toMap());
+      return user;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(
+        message: e.message ?? 'Google Sign-In failed.',
+        code: e.code,
+      );
+    } catch (e) {
+      throw AuthException(
+        message: 'An unexpected Google Sign-In error occurred: ${e.toString()}',
+        code: 'unknown',
+      );
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(
+        message: e.message ?? 'Password reset request failed.',
+        code: e.code,
+      );
+    } catch (e) {
+      throw AuthException(
+        message: 'An unexpected error occurred: ${e.toString()}',
+        code: 'unknown',
+      );
+    }
+  }
+
+  @override
+  Future<void> signOut() async {
+    await _auth.signOut();
+    try {
+      final googleSignIn = GoogleSignIn();
+      if (await googleSignIn.isSignedIn()) {
+        await googleSignIn.signOut();
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser != null) {
+      try {
+        await firebaseUser.delete();
+      } on FirebaseAuthException catch (e) {
+        throw AuthException(
+          message: e.message ?? 'Account deletion failed.',
+          code: e.code,
+        );
+      }
+    }
+    await HiveService.box.delete(_userKey);
+  }
+
+  @override
+  Future<UserModel> updateProfile({
+    required String studentId,
+    required String department,
+    required bool profileCompleted,
+  }) async {
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) {
+      throw const AuthException(
+        message: 'No authenticated user found to update.',
+        code: 'no-user',
+      );
+    }
+
+    final user = UserModel(
+      uid: firebaseUser.uid,
+      name: firebaseUser.displayName ?? '',
+      email: firebaseUser.email ?? '',
+      studentId: studentId.trim(),
+      department: department.trim(),
+      profileCompleted: profileCompleted,
+      createdAt: firebaseUser.metadata.creationTime ?? DateTime.now(),
+    );
+
+    await HiveService.box.put(_userKey, user.toMap());
+    return user;
   }
 }

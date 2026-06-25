@@ -40,16 +40,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // Call the notifier — navigation happens via RouterNotifier redirect,
-    // NOT from this method. The button only mutates AuthState.
     await ref.read(authProvider.notifier).signIn(
           email: _emailCtrl.text,
           password: _passwordCtrl.text,
         );
 
     if (mounted) setState(() => _isLoading = false);
-    // If sign-in failed, the notifier sets errorMessage on AuthState.
-    // ref.listen below picks it up and shows the snackbar.
+  }
+
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    await ref.read(authProvider.notifier).signInWithGoogle();
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _showError(String message) {
@@ -63,10 +65,93 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController();
+    final dialogFormKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Reset Password',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Form(
+          key: dialogFormKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Enter your registered email and we\'ll send you a password reset link.',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextFormField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  final emailRegex =
+                      RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$');
+                  if (!emailRegex.hasMatch(v.trim())) {
+                    return 'Enter a valid email address';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              if (!dialogFormKey.currentState!.validate()) return;
+              final resetEmail = emailCtrl.text.trim();
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              await ref.read(authProvider.notifier).sendPasswordReset(resetEmail);
+              if (mounted) {
+                setState(() => _isLoading = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Password reset email sent to $resetEmail'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('Send Link'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Listen to auth errors — only error display happens here.
-    // Navigation is handled by RouterNotifier when AuthStatus changes.
     ref.listen<AuthState>(authProvider, (previous, next) {
       final newError = next.errorMessage;
       if (newError != null && newError != previous?.errorMessage) {
@@ -77,226 +162,288 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              size: 18, color: AppColors.textPrimary),
-          onPressed: () => context.go('/auth'),
-        ),
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: AppSpacing.md),
-
-                // ── Header ───────────────────────────────────────────────
-                Text('Welcome Back', style: AppTextStyles.headingLarge)
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: 0.2, end: 0),
-
-                const SizedBox(height: AppSpacing.xs),
-
-                Text(
-                  'Sign in to continue your academic journey.',
-                  style: AppTextStyles.bodyMedium,
-                ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // ── Avatar icon ──────────────────────────────────────────
-                Center(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.school_rounded,
-                        color: AppColors.primary, size: 36),
-                  ),
-                )
-                    .animate(delay: 150.ms)
-                    .fadeIn(duration: 400.ms)
-                    .scale(begin: const Offset(0.7, 0.7)),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // ── Email ────────────────────────────────────────────────
-                _FieldLabel('Email Address'),
-                const SizedBox(height: AppSpacing.xs),
-                _LoginField(
-                  controller: _emailCtrl,
-                  focusNode: _emailFocus,
-                  nextFocus: _passwordFocus,
-                  hintText: 'you@example.com',
-                  prefixIcon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    return null;
-                  },
-                ).animate(delay: 200.ms).fadeIn(duration: 350.ms),
-
-                const SizedBox(height: AppSpacing.md),
-
-                // ── Password ─────────────────────────────────────────────
-                _FieldLabel('Password'),
-                const SizedBox(height: AppSpacing.xs),
-                _LoginField(
-                  controller: _passwordCtrl,
-                  focusNode: _passwordFocus,
-                  hintText: 'Your password',
-                  prefixIcon: Icons.lock_outline_rounded,
-                  obscureText: _obscurePassword,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _submit(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Please enter your password';
-                    return null;
-                  },
-                ).animate(delay: 250.ms).fadeIn(duration: 350.ms),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // ── Submit ───────────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      disabledBackgroundColor:
-                          AppColors.primary.withValues(alpha: 0.5),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── Academic Premium Logo / Brand ────────────────────────
+                  Center(
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, Color(0xFF8B5CF6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
                           )
-                        : Text(
-                            'Sign In',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                  ),
-                ).animate(delay: 300.ms).fadeIn(duration: 350.ms),
-
-                const SizedBox(height: AppSpacing.lg),
-
-                // ── Create account link ──────────────────────────────────
-                Center(
-                  child: GestureDetector(
-                    onTap: () => context.go('/register'),
-                    child: RichText(
-                      text: TextSpan(
-                        style: AppTextStyles.bodyMedium,
-                        children: [
-                          const TextSpan(text: "Don't have an account? "),
-                          TextSpan(
-                            text: 'Create one',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
                         ],
                       ),
+                      child: const Icon(
+                        Icons.school_rounded,
+                        color: Colors.white,
+                        size: 40,
+                      ),
                     ),
-                  ),
-                ).animate(delay: 350.ms).fadeIn(duration: 350.ms),
+                  )
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .scale(begin: const Offset(0.7, 0.7)),
 
-                const SizedBox(height: AppSpacing.xl),
-              ],
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Titles ───────────────────────────────────────────────
+                  Text(
+                    'Welcome Back',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ).animate(delay: 100.ms).fadeIn(duration: 350.ms),
+
+                  Text(
+                    'CGPA Tracker for Daffodil International University',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ).animate(delay: 150.ms).fadeIn(duration: 350.ms),
+
+                  const SizedBox(height: AppSpacing.xxl),
+
+                  // ── Email ────────────────────────────────────────────────
+                  Text(
+                    'Email Address',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ).animate(delay: 200.ms).fadeIn(duration: 300.ms),
+                  const SizedBox(height: AppSpacing.xs),
+                  _buildTextField(
+                    controller: _emailCtrl,
+                    focusNode: _emailFocus,
+                    nextFocus: _passwordFocus,
+                    hintText: 'student@diu.edu.bd',
+                    prefixIcon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      return null;
+                    },
+                  ).animate(delay: 200.ms).fadeIn(duration: 300.ms),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // ── Password ─────────────────────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Password',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _showForgotPasswordDialog,
+                        child: Text(
+                          'Forgot Password?',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ).animate(delay: 250.ms).fadeIn(duration: 300.ms),
+                  const SizedBox(height: AppSpacing.xs),
+                  _buildTextField(
+                    controller: _passwordCtrl,
+                    focusNode: _passwordFocus,
+                    hintText: 'Your password',
+                    prefixIcon: Icons.lock_outline_rounded,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _submit(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      return null;
+                    },
+                  ).animate(delay: 250.ms).fadeIn(duration: 300.ms),
+
+                  const SizedBox(height: AppSpacing.xxl),
+
+                  // ── Sign In Button ───────────────────────────────────────
+                  SizedBox(
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        disabledBackgroundColor:
+                            AppColors.primary.withValues(alpha: 0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Sign In',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ).animate(delay: 300.ms).fadeIn(duration: 300.ms),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // ── Divider ──────────────────────────────────────────────
+                  Row(
+                    children: [
+                      const Expanded(child: Divider(color: AppColors.border)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                        child: Text(
+                          'OR',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const Expanded(child: Divider(color: AppColors.border)),
+                    ],
+                  ).animate(delay: 350.ms).fadeIn(duration: 300.ms),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // ── Google Login Button ──────────────────────────────────
+                  SizedBox(
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _loginWithGoogle,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: Image.network(
+                        'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.png',
+                        height: 20,
+                        width: 20,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.login_rounded,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
+                      ),
+                      label: Text(
+                        'Continue with Google',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ).animate(delay: 400.ms).fadeIn(duration: 300.ms),
+
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ── Register Link ────────────────────────────────────────
+                  Center(
+                    child: GestureDetector(
+                      onTap: () => context.go('/register'),
+                      child: RichText(
+                        text: TextSpan(
+                          style: AppTextStyles.bodyMedium,
+                          children: [
+                            const TextSpan(text: "Don't have an account? "),
+                            TextSpan(
+                              text: 'Create one',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ).animate(delay: 450.ms).fadeIn(duration: 300.ms),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
 
-// ── Shared field label ────────────────────────────────────────────────────────
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: GoogleFonts.inter(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-    );
-  }
-}
-
-// ── Shared text field ─────────────────────────────────────────────────────────
-class _LoginField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final FocusNode? nextFocus;
-  final String hintText;
-  final IconData prefixIcon;
-  final TextInputType keyboardType;
-  final bool obscureText;
-  final Widget? suffixIcon;
-  final TextInputAction textInputAction;
-  final ValueChanged<String>? onFieldSubmitted;
-  final FormFieldValidator<String>? validator;
-
-  const _LoginField({
-    required this.controller,
-    required this.focusNode,
-    this.nextFocus,
-    required this.hintText,
-    required this.prefixIcon,
-    this.keyboardType = TextInputType.text,
-    this.obscureText = false,
-    this.suffixIcon,
-    this.textInputAction = TextInputAction.next,
-    this.onFieldSubmitted,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    FocusNode? nextFocus,
+    required String hintText,
+    required IconData prefixIcon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    TextInputAction textInputAction = TextInputAction.next,
+    ValueChanged<String>? onFieldSubmitted,
+    FormFieldValidator<String>? validator,
+  }) {
     return TextFormField(
       controller: controller,
       focusNode: focusNode,
@@ -321,13 +468,14 @@ class _LoginField extends StatelessWidget {
           fontSize: 14,
           color: AppColors.textSecondary.withValues(alpha: 0.6),
         ),
-        prefixIcon:
-            Icon(prefixIcon, size: 20, color: AppColors.textSecondary),
+        prefixIcon: Icon(prefixIcon, size: 20, color: AppColors.textSecondary),
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),

@@ -198,11 +198,13 @@ class CgpaCard extends ConsumerWidget {
                             color: Colors.white.withValues(alpha: 0.75),
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            improvementText,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.75),
+                          Expanded(
+                            child: Text(
+                              improvementText,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.75),
+                              ),
                             ),
                           ),
                         ],
@@ -228,15 +230,17 @@ class CgpaCard extends ConsumerWidget {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.bolt_rounded,
+                            const Icon(Icons.bolt_rounded,
                                 color: Colors.white, size: 18),
                             const SizedBox(width: 8),
-                            Text(
-                              'Your highest performance was Semester $bestSemester',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                            Expanded(
+                              child: Text(
+                                'Your highest performance was Semester $bestSemester',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ],
