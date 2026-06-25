@@ -185,11 +185,10 @@ class _RegistrationWizardScreenState
                       // ── Step 0: Academic Identity validation ─────────
                       if (safeStep == 0) {
                         if (data.department.isEmpty ||
-                            data.admissionTerm.isEmpty ||
                             data.completedSemester == 0 ||
                             data.studentId.isEmpty) {
                           _showSnack(
-                              'Please complete academic information including Student ID');
+                              'Please complete your Student ID, department, and current semester');
                           return;
                         }
                       }
