@@ -46,7 +46,7 @@ abstract interface class IAuthRepository {
     required String name,
     required String email,
     required String password,
-    required String studentId,
+    String studentId = '',
   });
 
   /// Verifies credentials and returns the signed-in [UserModel].
@@ -125,7 +125,7 @@ class LocalAuthRepository implements IAuthRepository {
     required String name,
     required String email,
     required String password,
-    required String studentId,
+    String studentId = '',
   }) async {
     if (HiveService.box.containsKey(_userKey) ||
         HiveService.box.containsKey('auth_user')) {
@@ -292,7 +292,7 @@ class FirebaseAuthRepository implements IAuthRepository {
     required String name,
     required String email,
     required String password,
-    required String studentId,
+    String studentId = '',
   }) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(

@@ -19,13 +19,11 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameFocus = FocusNode();
-  final _studentIdFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
 
   final _nameCtrl = TextEditingController();
-  final _studentIdCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -37,12 +35,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     _nameFocus.dispose();
-    _studentIdFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
     _nameCtrl.dispose();
-    _studentIdCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
@@ -57,7 +53,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           name: _nameCtrl.text,
           email: _emailCtrl.text,
           password: _passwordCtrl.text,
-          studentId: _studentIdCtrl.text,
         );
 
     if (mounted) setState(() => _isLoading = false);
@@ -137,7 +132,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 _AuthField(
                   controller: _nameCtrl,
                   focusNode: _nameFocus,
-                  nextFocus: _studentIdFocus,
+                  nextFocus: _emailFocus,
                   hintText: 'e.g. Jahirun Hassan',
                   prefixIcon: Icons.person_outline_rounded,
                   textCapitalization: TextCapitalization.words,
@@ -148,25 +143,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     return null;
                   },
                 ).animate(delay: 150.ms).fadeIn(duration: 350.ms),
-
-                const SizedBox(height: AppSpacing.md),
-
-                // ── Student ID ───────────────────────────────────────────
-                _FieldLabel('DIU Student ID'),
-                const SizedBox(height: AppSpacing.xs),
-                _AuthField(
-                  controller: _studentIdCtrl,
-                  focusNode: _studentIdFocus,
-                  nextFocus: _emailFocus,
-                  hintText: 'e.g. 201-15-12345',
-                  prefixIcon: Icons.badge_outlined,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Please enter your student ID';
-                    }
-                    return null;
-                  },
-                ).animate(delay: 200.ms).fadeIn(duration: 350.ms),
 
                 const SizedBox(height: AppSpacing.md),
 

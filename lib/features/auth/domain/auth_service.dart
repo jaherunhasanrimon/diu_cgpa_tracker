@@ -46,7 +46,7 @@ class AuthService {
     required String name,
     required String email,
     required String password,
-    required String studentId,
+    String studentId = '',
   }) =>
       _authRepository.signUp(
         name: name,
