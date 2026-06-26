@@ -102,7 +102,78 @@ class DashboardScreen extends ConsumerWidget {
                     onTap: () => context.push('/cgpa-details'),
                   ),
 
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Academic Tools heading ──────────────────────────
+                  Row(
+                    children: [
+                      Text(
+                        'Academic Tools',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '4 tools',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.md),
+
+                  // ── Academic Tools Grid (inline) ────────────────────
+                  GridView.count(
+                    crossAxisCount:
+                        MediaQuery.sizeOf(context).width >= 620 ? 4 : 2,
+                    mainAxisSpacing: AppSpacing.sm,
+                    crossAxisSpacing: AppSpacing.sm,
+                    childAspectRatio: 1.05,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: const [
+                      AcademicToolCard(
+                        icon: Icons.restart_alt_rounded,
+                        title: 'Retake Analyzer',
+                        subtitle: 'Find grade repair paths',
+                        accentColor: Color(0xFF4F46E5),
+                      ),
+                      AcademicToolCard(
+                        icon: Icons.track_changes_rounded,
+                        title: 'Target CGPA',
+                        subtitle: 'Plan your next goal',
+                        accentColor: Color(0xFF06B6D4),
+                      ),
+                      AcademicToolCard(
+                        icon: Icons.event_note_rounded,
+                        title: 'Semester Planner',
+                        subtitle: 'Map future credits',
+                        accentColor: Color(0xFF10B981),
+                      ),
+                      AcademicToolCard(
+                        icon: Icons.science_rounded,
+                        title: 'What-if Sandbox',
+                        subtitle: 'Test grade scenarios',
+                        accentColor: Color(0xFFF59E0B),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppSpacing.lg),
 
                   // ── Degree Progress Panel ───────────────────────────
                   _DegreeProgressPanel(
@@ -126,55 +197,7 @@ class DashboardScreen extends ConsumerWidget {
                   SemesterPlanPanel(plan: plan, intake: intake),
 
                   const SizedBox(height: AppSpacing.xl),
-
-                  // ── Academic Tools heading ──────────────────────────
-                  Text('Academic Tools',
-                      style: GoogleFonts.outfit(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      )),
-                  const SizedBox(height: AppSpacing.md),
                 ]),
-              ),
-            ),
-
-            // ── Academic Tools Grid ────────────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                0,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              sliver: SliverGrid.count(
-                crossAxisCount:
-                    MediaQuery.sizeOf(context).width >= 620 ? 4 : 2,
-                mainAxisSpacing: AppSpacing.md,
-                crossAxisSpacing: AppSpacing.md,
-                childAspectRatio: 1.02,
-                children: const [
-                  AcademicToolCard(
-                    icon: Icons.restart_alt,
-                    title: 'Retake Analyzer',
-                    subtitle: 'Find grade repair paths',
-                  ),
-                  AcademicToolCard(
-                    icon: Icons.track_changes,
-                    title: 'Target CGPA',
-                    subtitle: 'Plan your next goal',
-                  ),
-                  AcademicToolCard(
-                    icon: Icons.event_note,
-                    title: 'Semester Planner',
-                    subtitle: 'Map future credits',
-                  ),
-                  AcademicToolCard(
-                    icon: Icons.science_outlined,
-                    title: 'What-if Sandbox',
-                    subtitle: 'Test scenarios',
-                  ),
-                ],
               ),
             ),
           ],
