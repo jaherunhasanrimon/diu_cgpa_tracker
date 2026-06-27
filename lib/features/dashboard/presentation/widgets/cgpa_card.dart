@@ -211,11 +211,6 @@ class CgpaCard extends ConsumerWidget {
                       ),
                     ],
 
-                    const SizedBox(height: AppSpacing.md),
-
-                    // ── Interactive trend chart ──────────────────────────
-                    if (sgpaHistory.length >= 2)
-                      _InteractiveTrendChart(history: sgpaHistory),
 
                     // ── Best performance card ───────────────────────────
                     if (bestSemester != null) ...[
@@ -247,43 +242,6 @@ class CgpaCard extends ConsumerWidget {
                         ),
                       ),
                     ],
-
-                    const SizedBox(height: AppSpacing.md),
-
-                    // ── Bottom divider + credits row ─────────────────────
-                    Container(
-                        height: 1,
-                        color: Colors.white.withValues(alpha: 0.15)),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        Icon(Icons.menu_book_outlined,
-                            size: 15,
-                            color: Colors.white.withValues(alpha: 0.65)),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${summary.completedCredits.toStringAsFixed(1)} / — Credits',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.65),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.25)),
-                          ),
-                          child: Icon(Icons.open_in_new_rounded,
-                              size: 14,
-                              color: Colors.white.withValues(alpha: 0.75)),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
