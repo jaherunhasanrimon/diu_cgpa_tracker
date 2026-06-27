@@ -212,13 +212,11 @@ class DashboardScreen extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _AppBar extends StatelessWidget {
   final String userName;
-  final String studentId;
   final String department;
   final Future<void> Function() onReset;
 
   const _AppBar({
     required this.userName,
-    required this.studentId,
     required this.department,
     required this.onReset,
   });
@@ -230,45 +228,62 @@ class _AppBar extends StatelessWidget {
           AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       child: Row(
         children: [
-          // Profile avatar
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4648D4), Color(0xFF7C5CE8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          // Account avatar (tappable)
+          GestureDetector(
+            onTap: () => _showAccountSheet(context),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4648D4), Color(0xFF7C5CE8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                width: 2,
-              ),
+              child: const Icon(Icons.person_rounded,
+                  size: 22, color: Colors.white),
             ),
-            child: const Icon(Icons.person_rounded,
-                size: 22, color: Colors.white),
           ),
 
-          // Centered title
+          const SizedBox(width: AppSpacing.sm),
+
+          // Name + department (left-aligned, no ID)
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: AppColors.primary,
                   ),
                 ),
                 Text(
-                  studentId.isNotEmpty ? '$department · $studentId' : department,
+                  department,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: AppColors.textSecondary,
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],
