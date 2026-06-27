@@ -211,6 +211,11 @@ class CgpaCard extends ConsumerWidget {
                       ),
                     ],
 
+                    const SizedBox(height: AppSpacing.md),
+
+                    // ── Interactive trend chart ──────────────────────────
+                    if (sgpaHistory.length >= 2)
+                      _InteractiveTrendChart(history: sgpaHistory),
 
                     // ── Best performance card ───────────────────────────
                     if (bestSemester != null) ...[
