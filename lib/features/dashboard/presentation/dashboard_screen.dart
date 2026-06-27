@@ -29,7 +29,6 @@ class DashboardScreen extends ConsumerWidget {
     final authState = ref.watch(authProvider);
 
     final userName = authState.user?.name ?? 'Student';
-    final studentId = authState.user?.studentId ?? '';
     final department = student?['department']?.toString() ?? 'CSE';
     final intake = student?['intake']?.toString() ?? 'Unknown intake';
     final currentSemester = (student?['semester'] as num?)?.toInt() ?? 0;
