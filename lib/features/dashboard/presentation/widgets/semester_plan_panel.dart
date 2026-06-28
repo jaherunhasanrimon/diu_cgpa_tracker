@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../academic/data/models/course_model.dart';
 import '../../../academic_exception/data/models/student_semester_plan.dart';
 import '../../../academic_exception/providers/academic_exception_provider.dart';
+import 'semester_transition_dialog.dart';
 
 class SemesterPlanPanel extends ConsumerWidget {
   final StudentSemesterPlan plan;
@@ -65,6 +66,32 @@ class SemesterPlanPanel extends ConsumerWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Complete Semester Transition Action
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: Text('Move to Semester ${plan.semester + 1} option'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => SemesterTransitionDialog(
+                    currentCompletedSemester: plan.semester - 1,
+                    intake: intake,
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
 

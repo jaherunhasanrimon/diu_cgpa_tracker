@@ -5,6 +5,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../academic/data/sources/cse_curriculum_source.dart';
+import '../../academic/data/models/course_model.dart';
+import '../../academic/domain/semester_tracker.dart';
+import '../../academic/providers/academic_provider.dart';
 import '../../academic_exception/data/models/academic_exception_model.dart';
 import '../../academic_exception/providers/academic_exception_provider.dart';
 import '../providers/cgpa_provider.dart';
@@ -315,12 +318,147 @@ class _SemesterExpansionCardState extends State<_SemesterExpansionCard>
     return 'Level $level · Term $term';
   }
 
+  void _showEditGradesDialog(BuildContext context, WidgetRef ref, List<CourseModel> courses) {
+    final exceptionsNotifier = ref.read(academicExceptionsProvider.notifier);
+    final exceptions = ref.read(academicExceptionsProvider);
+    final gpaRecords = SemesterTracker.getCourseGpaRecords();
+
+    final Map<String, String> selectedGrades = {};
+    for (final course in courses) {
+      final rec = gpaRecords[course.code];
+      if (rec != null) {
+        selectedGrades[course.code] = SemesterTracker.getLetterGradeForGpa(rec['gpa'] as double);
+      } else {
+        selectedGrades[course.code] = widget.sgpa > 0.0 ? SemesterTracker.getLetterGradeForGpa(widget.sgpa) : 'A';
+      }
+    }
+
+    final sgpaController = TextEditingController(text: widget.sgpa.toStringAsFixed(2));
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            double totalQualityPoints = 0.0;
+            double totalCredits = 0.0;
+            for (final course in courses) {
+              final grade = selectedGrades[course.code] ?? 'A';
+              final gpa = SemesterTracker.letterGradeToGpaMap[grade] ?? 0.0;
+              totalQualityPoints += (gpa * course.credit);
+              totalCredits += course.credit;
+            }
+            final calculatedSgpa = totalCredits == 0 ? 0.0 : totalQualityPoints / totalCredits;
+
+            return AlertDialog(
+              title: Text('Edit Semester ${widget.semesterNumber} Results'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: courses.length,
+                        itemBuilder: (context, index) {
+                          final course = courses[index];
+                          final selectedGrade = selectedGrades[course.code] ?? 'A';
+
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              '${course.code}: ${course.title}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text('${course.credit} cr'),
+                            trailing: DropdownButton<String>(
+                              value: selectedGrade,
+                              underline: const SizedBox(),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: selectedGrade == 'F (Retake)' ? AppColors.danger : AppColors.success,
+                              ),
+                              items: SemesterTracker.letterGradeToGpaMap.keys
+                                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    selectedGrades[course.code] = val;
+                                    double tempQP = 0.0;
+                                    double tempCr = 0.0;
+                                    for (final c in courses) {
+                                      final g = selectedGrades[c.code] ?? 'A';
+                                      final gp = SemesterTracker.letterGradeToGpaMap[g] ?? 0.0;
+                                      tempQP += (gp * c.credit);
+                                      tempCr += c.credit;
+                                    }
+                                    sgpaController.text = (tempCr == 0 ? 0.0 : tempQP / tempCr).toStringAsFixed(2);
+                                  });
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Calculated SGPA: ${calculatedSgpa.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(
+                          width: 100,
+                          child: TextFormField(
+                            controller: sgpaController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'SGPA', border: OutlineInputBorder()),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final enteredSgpa = double.tryParse(sgpaController.text) ?? calculatedSgpa;
+                    await SemesterTracker.updatePastSemesterGrades(
+                      semester: widget.semesterNumber,
+                      intake: widget.intake,
+                      courseGrades: selectedGrades,
+                      enteredSgpa: enteredSgpa,
+                      courses: courses,
+                      exceptionsNotifier: exceptionsNotifier,
+                      existingExceptions: exceptions,
+                    );
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final courses = CseCurriculumSource.getCoursesForSemester(
       intake: widget.intake,
       semesterNumber: widget.semesterNumber,
     );
+    final gpaRecords = SemesterTracker.getCourseGpaRecords();
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -374,7 +512,7 @@ class _SemesterExpansionCardState extends State<_SemesterExpansionCard>
                       ),
                       child: Center(
                         child: Text(
-                          '${widget.semesterNumber}',
+                           '${widget.semesterNumber}',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -407,32 +545,47 @@ class _SemesterExpansionCardState extends State<_SemesterExpansionCard>
                         ],
                       ),
                     ),
-                    // SGPA chip
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    // SGPA chip + Edit button
+                    Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _sgpaColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            widget.sgpa.toStringAsFixed(2),
-                            style: TextStyle(
-                              color: _sgpaColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _sgpaColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                widget.sgpa.toStringAsFixed(2),
+                                style: TextStyle(
+                                  color: _sgpaColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'SGPA',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'SGPA',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            fontSize: 10,
-                          ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Consumer(
+                          builder: (context, ref, child) {
+                            return IconButton(
+                              icon: const Icon(Icons.edit_rounded, size: 18, color: AppColors.primary),
+                              onPressed: () => _showEditGradesDialog(context, ref, courses),
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -493,6 +646,11 @@ class _SemesterExpansionCardState extends State<_SemesterExpansionCard>
                           final isFailed = widget.exceptions.any((e) =>
                               e.originalSemester == widget.semesterNumber &&
                               e.courseId == course.code);
+                          final gradeRec = gpaRecords[course.code];
+                          final gradeStr = gradeRec != null 
+                              ? SemesterTracker.getLetterGradeForGpa(gradeRec['gpa'] as double)
+                              : null;
+
                           return _CourseRow(
                             index: i + 1,
                             code: course.code,
@@ -500,6 +658,7 @@ class _SemesterExpansionCardState extends State<_SemesterExpansionCard>
                             credit: course.credit,
                             isFailed: isFailed,
                             isLast: isLast,
+                            grade: gradeStr,
                           );
                         }),
                       ),
@@ -524,6 +683,7 @@ class _CourseRow extends StatelessWidget {
   final double credit;
   final bool isFailed;
   final bool isLast;
+  final String? grade;
 
   const _CourseRow({
     required this.index,
@@ -532,6 +692,7 @@ class _CourseRow extends StatelessWidget {
     required this.credit,
     required this.isFailed,
     required this.isLast,
+    this.grade,
   });
 
   @override
@@ -590,6 +751,27 @@ class _CourseRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // Grade badge (if available)
+              if (grade != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isFailed
+                        ? AppColors.danger.withValues(alpha: 0.1)
+                        : AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    grade!,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isFailed ? AppColors.danger : AppColors.success,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: AppSpacing.sm),
               // Credit badge
               Container(

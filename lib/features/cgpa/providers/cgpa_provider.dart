@@ -47,6 +47,7 @@ class CgpaSummary {
 }
 
 final semesterResultsProvider = Provider((ref) {
+  ref.watch(studentProvider);
   return CgpaRepository().getResults();
 });
 

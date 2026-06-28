@@ -1,19 +1,18 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 class HiveService {
-
   static late Box _box;
-
+  static bool _isInitialized = false;
 
   static Future<void> init() async {
-
     await Hive.initFlutter();
-
     _box = await Hive.openBox(
       'diu_cgpa_tracker',
     );
-
+    _isInitialized = true;
   }
+
+  static bool get isInitialized => _isInitialized;
 
 
 
