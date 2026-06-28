@@ -38,8 +38,10 @@ class DashboardScreen extends ConsumerWidget {
     final totalCurriculumCredits = CurriculumEngine().totalCreditForIntake(
       intake: intake,
     );
-    final remainingCredits =
-        (totalCurriculumCredits - totalCredits).clamp(0.0, double.infinity);
+    final remainingCredits = isRegular
+        ? (totalCurriculumCredits - totalCredits).clamp(0.0, double.infinity)
+        : (summary.incompleteCredits ?? (totalCurriculumCredits - totalCredits))
+            .clamp(0.0, double.infinity);
 
     final degreeProgress = totalCurriculumCredits == 0
         ? 0.0
@@ -51,6 +53,8 @@ class DashboardScreen extends ConsumerWidget {
     final completedSemesters = summary.completedSemesters;
     final remainingSemesters =
         (totalSemesters - completedSemesters).clamp(0, totalSemesters);
+
+    final backlogCount = isRegular ? 0 : (summary.backlogCourseCount ?? 0);
 
     final exceptions = ref.watch(academicExceptionsProvider);
     final runningSemester = currentSemester + 1;
@@ -182,6 +186,7 @@ class DashboardScreen extends ConsumerWidget {
                     remainingCredits: remainingCredits,
                     isRegular: isRegular,
                     totalCurriculumCredits: totalCurriculumCredits,
+                    backlogCourseCount: backlogCount,
                   ),
 
                   const SizedBox(height: AppSpacing.md),
@@ -479,6 +484,7 @@ class _DegreeProgressPanel extends StatelessWidget {
   final double remainingCredits;
   final bool isRegular;
   final double totalCurriculumCredits;
+  final int backlogCourseCount;
 
   const _DegreeProgressPanel({
     required this.degreeProgress,
@@ -488,6 +494,7 @@ class _DegreeProgressPanel extends StatelessWidget {
     required this.remainingCredits,
     required this.isRegular,
     required this.totalCurriculumCredits,
+    required this.backlogCourseCount,
   });
 
   @override
@@ -625,6 +632,40 @@ class _DegreeProgressPanel extends StatelessWidget {
           ),
 
           const SizedBox(height: AppSpacing.sm),
+
+          // ── Backlog alert (irregular students only) ────────────────────────
+          // Hidden when backlogCourseCount == 0 (always the case for regular).
+          if (backlogCourseCount > 0) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppColors.danger.withValues(alpha: 0.20)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 16, color: AppColors.danger),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '$backlogCourseCount course${backlogCourseCount == 1 ? '' : 's'} in backlog — retake pending',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.danger,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Academic Track row
           Container(
