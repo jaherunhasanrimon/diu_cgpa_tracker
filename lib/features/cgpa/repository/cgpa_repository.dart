@@ -10,7 +10,7 @@ class CgpaRepository {
 
 
   List<SemesterResultModel> getResults(){
-
+    if (!HiveService.isInitialized) return [];
     final raw = HiveService.box.get(
       _resultsKey,
       defaultValue: const [],

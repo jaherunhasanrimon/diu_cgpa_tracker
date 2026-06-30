@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,8 +6,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../academic/data/models/course_model.dart';
+import '../../../academic/domain/semester_tracker.dart';
 import '../../../academic_exception/data/models/student_semester_plan.dart';
 import '../../../academic_exception/providers/academic_exception_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import 'semester_transition_dialog.dart';
 
 class SemesterPlanPanel extends ConsumerWidget {
@@ -24,6 +27,15 @@ class SemesterPlanPanel extends ConsumerWidget {
     final hasRegular = plan.regularCourses.isNotEmpty;
     final hasRetakes = plan.retakeCourses.isNotEmpty;
     final hasBlocked = plan.blockedCourses.isNotEmpty;
+
+    final studentId = ref.watch(authProvider).user?.studentId ?? '';
+    final completedSemester = plan.semester - 1;
+
+    final (allowed, nextStartDate) = SemesterTracker.checkTransitionAllowed(
+      completedSemester: completedSemester,
+      intake: intake,
+      studentId: studentId,
+    );
 
     return Container(
       width: double.infinity,
@@ -75,24 +87,64 @@ class SemesterPlanPanel extends ConsumerWidget {
               icon: const Icon(Icons.arrow_forward_rounded, size: 16),
               label: Text('Move to Semester ${plan.semester + 1} option'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: allowed ? AppColors.primary : Colors.grey.shade300,
+                foregroundColor: allowed ? Colors.white : Colors.grey.shade500,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 0,
               ),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (ctx) => SemesterTransitionDialog(
-                    currentCompletedSemester: plan.semester - 1,
-                    intake: intake,
-                  ),
-                );
-              },
+              onPressed: allowed
+                  ? () {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => SemesterTransitionDialog(
+                          currentCompletedSemester: plan.semester - 1,
+                          intake: intake,
+                        ),
+                      );
+                    }
+                  : null,
             ),
           ),
+          if (!allowed) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    'Unlocks when the next semester begins (on ${SemesterTracker.getFormattedDate(nextStartDate)})',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 4),
+                    TextButton.icon(
+                      icon: const Icon(Icons.developer_mode_rounded, size: 14, color: AppColors.primary),
+                      label: const Text(
+                        'Debug Bypass Date Lock',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => SemesterTransitionDialog(
+                            currentCompletedSemester: plan.semester - 1,
+                            intake: intake,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
 
           // Available / Regular Courses

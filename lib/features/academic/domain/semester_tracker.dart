@@ -41,6 +41,7 @@ class SemesterTracker {
   /// Retrieves all course GPA records from Hive.
   /// Map structure: courseCode -> { 'gpa': double, 'semester': int, 'isRetake': bool }
   static Map<String, Map<String, dynamic>> getCourseGpaRecords() {
+    if (!HiveService.isInitialized) return {};
     final raw = HiveService.box.get(_gpaRecordsKey, defaultValue: {});
     if (raw is! Map) return {};
     
@@ -59,6 +60,7 @@ class SemesterTracker {
 
   /// Saves course GPA records to Hive.
   static Future<void> saveCourseGpaRecords(Map<String, Map<String, dynamic>> records) async {
+    if (!HiveService.isInitialized) return;
     await HiveService.box.put(_gpaRecordsKey, records);
   }
 
@@ -141,6 +143,7 @@ class SemesterTracker {
     required String studentId,
     DateTime? mockNow,
   }) {
+    if (!HiveService.isInitialized) return student;
     final now = mockNow ?? DateTime.now();
     final intake = student['intake']?.toString() ?? 'Tri';
     final storedCompletedSemester = (student['semester'] as num?)?.toInt() ?? 0;
@@ -309,5 +312,44 @@ class SemesterTracker {
     }
     results.sort((a, b) => a.semester.compareTo(b.semester));
     await cgpaRepo.save(results);
+  }
+
+  /// Checks if the next semester calendar date has actually arrived.
+  static (bool allowed, DateTime nextSemesterStartDate) checkTransitionAllowed({
+    required int completedSemester,
+    required String intake,
+    required String studentId,
+    DateTime? mockNow,
+  }) {
+    final now = mockNow ?? DateTime.now();
+    final (startTermIndex, startYear) = getStartTermAndYear(studentId: studentId, intake: intake);
+    
+    final runningSemester = completedSemester + 1;
+    final runningTermIndex = (startTermIndex + runningSemester - 1) % 3;
+    final runningYear = startYear + (startTermIndex + runningSemester - 1) ~/ 3;
+    
+    final (todayTermIndex, todayYear) = getTermAndYearForDate(now);
+    
+    final diff = (todayYear - runningYear) * 3 + (todayTermIndex - runningTermIndex);
+    
+    // Calculate the start date of the next semester
+    DateTime nextStartDate;
+    if (runningTermIndex == 0) {
+      nextStartDate = DateTime(runningYear, 5, 1);
+    } else if (runningTermIndex == 1) {
+      nextStartDate = DateTime(runningYear, 9, 1);
+    } else {
+      nextStartDate = DateTime(runningYear + 1, 1, 1);
+    }
+    
+    return (diff > 0, nextStartDate);
+  }
+
+  static String getFormattedDate(DateTime date) {
+    final months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 }
