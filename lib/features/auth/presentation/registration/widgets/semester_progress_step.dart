@@ -19,7 +19,7 @@ class SemesterProgressStep extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Here are the semesters you've completed so far.',
+            'Here are the semesters you\'ve completed so far.',
             style: GoogleFonts.inter(
               fontSize: 13,
               color: AppColors.textSecondary,
