@@ -129,7 +129,7 @@ class SemesterProgressStep extends ConsumerWidget {
 
 class _SemesterTile extends StatelessWidget {
   final int semester;
-  const _SemesterTile({super.key, required this.semester});
+  const _SemesterTile({required this.semester});
 
   // Assign a subtle color per semester to give each row a unique accent
   Color get _accentColor {
