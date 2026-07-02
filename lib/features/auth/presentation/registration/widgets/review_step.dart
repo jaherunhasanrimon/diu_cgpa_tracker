@@ -1,23 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/theme/app_spacing.dart';
+import '../../../../../core/theme/app_text_styles.dart';
 import '../../../../academic_exception/domain/exception_engine.dart';
 import '../../../../cgpa/domain/cgpa_engine.dart';
 import '../../../providers/registration_provider.dart';
-
-// ── Onboarding design tokens ──────────────────────────────────────────────────
-const _kSurface2 = Color(0xFF161D2E);
-const _kSurface3 = Color(0xFF1E2A3E);
-const _kPrimary  = Color(0xFF6C63FF);
-const _kTxtPri   = Color(0xFFF8FAFC);
-const _kTxtSec   = Color(0xFF94A3B8);
-const _kTxtDis   = Color(0xFF64748B);
-const _kBorder   = Color(0x1AFFFFFF);
-const _kSuccess  = Color(0xFF10B981);
-const _kWarning  = Color(0xFFF59E0B);
-const _kError    = Color(0xFFEF4444);
 
 class ReviewStep extends ConsumerWidget {
   const ReviewStep({super.key});
@@ -26,294 +15,222 @@ class ReviewStep extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(registrationProvider);
 
-    final adjusted = ExceptionEngine().adjust(
+    // Calculate adjusted results for correct review metrics
+    final adjustedResults = ExceptionEngine().adjust(
       semesters: data.results,
       exceptions: data.exceptions,
     );
-    final cgpa = CgpaEngine().calculate(adjusted);
-    final credits =
-        adjusted.fold<double>(0.0, (t, r) => t + r.credit);
-    final pending = data.exceptions.where((e) => !e.completed).length;
-    final done    = data.exceptions.where((e) => e.completed).length;
+
+    final cgpa = CgpaEngine().calculate(adjustedResults);
+    final completedCredits = adjustedResults.fold<double>(
+      0.0,
+      (total, result) => total + result.credit,
+    );
+
+    final pendingCount = data.exceptions.where((e) => !e.completed).length;
+    final completedCount = data.exceptions.where((e) => e.completed).length;
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Review your academic profile before finishing.',
-            style: GoogleFonts.inter(
-                fontSize: 13, color: _kTxtSec, height: 1.5),
+            'Confirm academic profile setup.',
+            style: AppTextStyles.bodyMedium,
           ),
+          const SizedBox(height: AppSpacing.lg),
 
-          const SizedBox(height: 16),
-
-          // ── CGPA hero card (dark glass) ──────────────────────────────────
-          _CgpaCard(cgpa: cgpa, credits: credits, semesters: data.completedSemester)
-              .animate().fadeIn(duration: 380.ms).slideY(begin: 0.08, end: 0),
-
-          const SizedBox(height: 14),
-
-          // ── Academic info ────────────────────────────────────────────────
-          _SectionCard(
-            children: [
-              _Row(label: 'Department',      value: data.department.isEmpty ? '—' : data.department),
-              _Divider(),
-              _Row(label: 'Intake',          value: data.admissionTerm.isEmpty ? '—' : data.admissionTerm),
-              _Divider(),
-              _Row(label: 'Current Semester', value: '${data.completedSemester + 1}'),
-              _Divider(),
-              _Row(
-                label: 'Academic Track',
-                value: data.isRegular ? 'Regular' : 'Irregular',
-                valueColor:
-                    data.isRegular ? _kSuccess : _kWarning,
-              ),
-            ],
-          ).animate(delay: 60.ms).fadeIn(duration: 340.ms),
-
-          // ── Exceptions summary (irregular only) ──────────────────────────
-          if (!data.isRegular) ...[
-            const SizedBox(height: 14),
-            _Label('Exceptions'),
-            const SizedBox(height: 8),
-            _SectionCard(
-              children: [
-                _CountRow(label: 'Pending Retakes',   count: pending, color: _kError),
-                _Divider(),
-                _CountRow(label: 'Completed Retakes', count: done,    color: _kSuccess),
+          // Overview Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
               ],
-            ).animate(delay: 100.ms).fadeIn(duration: 340.ms),
-          ],
-
-          const SizedBox(height: 14),
-
-          // ── SGPA breakdown ───────────────────────────────────────────────
-          _Label('Semester Breakdown'),
-          const SizedBox(height: 8),
-
-          ...adjusted.asMap().entries.map((entry) {
-            final i      = entry.key;
-            final result = entry.value;
-            final orig   = data.results.firstWhere(
-                (r) => r.semester == result.semester,
-                orElse: () => result);
-            return _SgpaRow(
-              semester: result.semester,
-              sgpa: result.sgpa,
-              credit: result.credit,
-              creditChanged: orig.credit != result.credit,
-              originalCredit: orig.credit,
-            )
-                .animate(delay: Duration(milliseconds: 120 + 35 * i))
-                .fadeIn(duration: 260.ms)
-                .slideX(begin: 0.05, end: 0);
-          }),
-
-          const SizedBox(height: 28),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CGPA hero card — dark glass, no neon gradient
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CgpaCard extends StatelessWidget {
-  final double cgpa;
-  final double credits;
-  final int semesters;
-  const _CgpaCard(
-      {required this.cgpa, required this.credits, required this.semesters});
-
-  String get _label {
-    if (cgpa >= 3.75) return 'Outstanding';
-    if (cgpa >= 3.50) return 'Excellent';
-    if (cgpa >= 3.25) return 'Very Good';
-    if (cgpa >= 3.00) return 'Good';
-    if (cgpa >= 2.50) return 'Satisfactory';
-    return 'Needs Improvement';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _kSurface2,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _kBorder),
-        // Very subtle primary tint in the top layer
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _kPrimary.withValues(alpha: 0.10),
-            Colors.transparent,
-          ],
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Left: CGPA number
-          Expanded(
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Estimated CGPA',
-                  style: GoogleFonts.inter(fontSize: 11, color: _kTxtDis),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  cgpa.toStringAsFixed(2),
-                  style: GoogleFonts.outfit(
-                    fontSize: 52,
-                    fontWeight: FontWeight.w800,
-                    color: _kTxtPri,
-                    height: 1,
-                    letterSpacing: -1.5,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _kPrimary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _kPrimary.withValues(alpha: 0.28)),
-                  ),
-                  child: Text(
-                    _label,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: _kPrimary,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cgpa.toStringAsFixed(2),
+                          style: AppTextStyles.headingMedium.copyWith(
+                            fontSize: 36,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Estimated CGPA',
+                          style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                        ),
+                      ],
                     ),
-                  ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          completedCredits.toStringAsFixed(1),
+                          style: AppTextStyles.headingMedium.copyWith(
+                            fontSize: 28,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Completed Credits',
+                          style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const Divider(height: AppSpacing.lg),
+                _InfoRow(label: 'Department', value: data.department),
+                _InfoRow(label: 'Intake', value: data.admissionTerm),
+                _InfoRow(label: 'Current Semester', value: '${data.completedSemester + 1}'),
+                _InfoRow(
+                  label: 'Academic Track',
+                  value: data.isRegular ? 'Regular Student' : 'Irregular Student',
+                  valueColor: data.isRegular ? AppColors.success : AppColors.warning,
                 ),
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.lg),
 
-          // Right: stat pills
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _MiniStat(
-                  label: 'Credits',
-                  value: credits.toStringAsFixed(1)),
-              const SizedBox(height: 8),
-              _MiniStat(
-                  label: 'Semesters',
-                  value: '$semesters'),
-            ],
+          // Exceptions Summary Card
+          if (!data.isRegular) ...[
+            Text(
+              'Exceptions Summary',
+              style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  _SummaryItem(label: 'Pending Incomplete Courses', count: pendingCount, color: AppColors.danger),
+                  const Divider(height: AppSpacing.sm),
+                  _SummaryItem(label: 'Completed Retakes', count: completedCount, color: AppColors.success),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Exception course list details
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: data.exceptions.length,
+              itemBuilder: (context, index) {
+                final e = data.exceptions[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                  child: Text(
+                    '• ${e.courseId}: ${e.courseName} (Original Sem: ${e.originalSemester}, '
+                    '${e.completed ? "Completed in Sem ${e.completedSemester}" : "Pending retake"})',
+                    style: AppTextStyles.bodyMedium.copyWith(fontSize: 12),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+
+          Text(
+            'Semester SGPA Results',
+            style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: data.results.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final result = data.results[index];
+              // Get original vs adjusted credit for this semester
+              final adjustedRes = adjustedResults.firstWhere((r) => r.semester == result.semester);
+              final creditChanged = result.credit != adjustedRes.credit;
+
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Semester ${result.semester}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Row(
+                  children: [
+                    Text('Credit: ${result.credit.toStringAsFixed(1)}'),
+                    if (creditChanged) ...[
+                      const Icon(Icons.arrow_right_alt, size: 16, color: AppColors.textSecondary),
+                      Text(
+                        '${adjustedRes.credit.toStringAsFixed(1)} (Dropped)',
+                        style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ],
+                ),
+                trailing: Text(
+                  adjustedRes.sgpa.toStringAsFixed(2),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: result.sgpa != adjustedRes.sgpa ? AppColors.success : AppColors.textPrimary,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.xl),
         ],
       ),
     );
   }
 }
 
-class _MiniStat extends StatelessWidget {
-  final String label;
-  final String value;
-  const _MiniStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: _kSurface3,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(value,
-              style: GoogleFonts.outfit(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: _kTxtPri)),
-          Text(label,
-              style: GoogleFonts.inter(fontSize: 10, color: _kTxtSec)),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Section card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionCard extends StatelessWidget {
-  final List<Widget> children;
-  const _SectionCard({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: _kSurface2,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kBorder),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Column(children: children),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Row widgets
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Label extends StatelessWidget {
-  final String text;
-  const _Label(this.text);
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: GoogleFonts.outfit(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: _kTxtSec,
-            letterSpacing: 0.2));
-  }
-}
-
-class _Row extends StatelessWidget {
+class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
-  const _Row({required this.label, required this.value, this.valueColor});
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Text(label,
-                style: GoogleFonts.inter(fontSize: 13, color: _kTxtSec)),
-          ),
+          Text(label, style: AppTextStyles.bodyMedium),
           Text(
             value,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? _kTxtPri,
+            style: AppTextStyles.bodyLarge.copyWith(
+              fontWeight: FontWeight.bold,
+              color: valueColor ?? AppColors.textPrimary,
             ),
           ),
         ],
@@ -322,118 +239,42 @@ class _Row extends StatelessWidget {
   }
 }
 
-class _CountRow extends StatelessWidget {
+class _SummaryItem extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
-  const _CountRow(
-      {required this.label, required this.count, required this.color});
+
+  const _SummaryItem({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Text(label,
-                style: GoogleFonts.inter(fontSize: 13, color: _kTxtSec)),
-          ),
+          Text(label, style: AppTextStyles.bodyMedium),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               '$count',
-              style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: color),
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-}
-
-class _SgpaRow extends StatelessWidget {
-  final int semester;
-  final double sgpa;
-  final double credit;
-  final bool creditChanged;
-  final double originalCredit;
-
-  const _SgpaRow({
-    required this.semester,
-    required this.sgpa,
-    required this.credit,
-    required this.creditChanged,
-    required this.originalCredit,
-  });
-
-  Color get _sgpaColor {
-    if (sgpa >= 3.75) return _kSuccess;
-    if (sgpa >= 3.00) return _kPrimary;
-    if (sgpa >= 2.50) return _kWarning;
-    return _kError;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: _kSurface2,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: _kBorder),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Sem $semester',
-            style: GoogleFonts.inter(
-                fontSize: 13, fontWeight: FontWeight.w600, color: _kTxtPri),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            creditChanged
-                ? '${originalCredit.toStringAsFixed(1)}→${credit.toStringAsFixed(1)} cr'
-                : '${credit.toStringAsFixed(1)} cr',
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: creditChanged ? _kWarning : _kTxtDis,
-              fontWeight:
-                  creditChanged ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: _sgpaColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              sgpa.toStringAsFixed(2),
-              style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: _sgpaColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(height: 1, thickness: 0.5, color: Color(0x1AFFFFFF));
   }
 }
