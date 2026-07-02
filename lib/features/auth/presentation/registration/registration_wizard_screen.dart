@@ -29,9 +29,7 @@ const _kTxtPri   = Color(0xFFF8FAFC);
 const _kTxtSec   = Color(0xFF94A3B8);
 const _kTxtDis   = Color(0xFF64748B);
 const _kBorder   = Color(0x1AFFFFFF);   // white 10 %
-const _kSuccess  = Color(0xFF10B981);
-const _kWarning  = Color(0xFFF59E0B);
-const _kError    = Color(0xFFEF4444);
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step metadata — single accent; individual icons only for identification
