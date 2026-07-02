@@ -7,14 +7,10 @@ import '../../../../academic/domain/curriculum_engine.dart';
 import '../../../providers/registration_provider.dart';
 
 // ── Onboarding design tokens (mirrored from wizard screen) ───────────────────
-const _kSurface2 = Color(0xFF161D2E);
-const _kSurface3 = Color(0xFF1E2A3E);
-const _kPrimary  = Color(0xFF6C63FF);
-const _kTxtPri   = Color(0xFFF8FAFC);
 const _kTxtSec   = Color(0xFF94A3B8);
 const _kTxtDis   = Color(0xFF64748B);
-const _kBorder   = Color(0x1AFFFFFF);
 const _kSuccess  = Color(0xFF10B981);
+
 
 class AcademicIdentityStep extends ConsumerStatefulWidget {
   const AcademicIdentityStep({super.key});
@@ -111,7 +107,8 @@ class _AcademicIdentityStepState extends ConsumerState<AcademicIdentityStep> {
 
           // ── Department ────────────────────────────────────────────────────
           DropdownButtonFormField<String>(
-            value: data.department.isEmpty ? null : data.department,
+            initialValue: data.department.isEmpty ? null : data.department,
+
             decoration: const InputDecoration(
               labelText: 'Department',
               prefixIcon: Icon(Icons.apartment_rounded, size: 18),
@@ -139,9 +136,10 @@ class _AcademicIdentityStepState extends ConsumerState<AcademicIdentityStep> {
 
           // ── Current Semester ──────────────────────────────────────────────
           DropdownButtonFormField<String>(
-            value: data.completedSemester == 0
+            initialValue: data.completedSemester == 0
                 ? null
                 : data.completedSemester.toString(),
+
             decoration: const InputDecoration(
               labelText: 'Current Semester',
               prefixIcon: Icon(Icons.layers_rounded, size: 18),
