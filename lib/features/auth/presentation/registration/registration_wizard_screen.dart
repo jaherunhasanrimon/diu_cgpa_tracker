@@ -29,6 +29,7 @@ const _kTxtPri   = Color(0xFFF8FAFC);
 const _kTxtSec   = Color(0xFF94A3B8);
 const _kTxtDis   = Color(0xFF64748B);
 const _kBorder   = Color(0x1AFFFFFF);   // white 10 %
+const _kError    = Color(0xFFEF4444);
 
 
 // ─────────────────────────────────────────────────────────────────────────────
