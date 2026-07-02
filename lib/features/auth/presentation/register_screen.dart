@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,22 +7,36 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 
+// ── Onboarding design tokens ──────────────────────────────────────────────────
+const _kBg       = Color(0xFF07111F);
+const _kBgAlt    = Color(0xFF0B1730);
+const _kSurface1 = Color(0xFF121826);
+const _kSurface3 = Color(0xFF1E2A3E);
+const _kPrimary  = Color(0xFF6C63FF);
+const _kTxtPri   = Color(0xFFF8FAFC);
+const _kTxtSec   = Color(0xFF94A3B8);
+const _kTxtDis   = Color(0xFF64748B);
+const _kBorder   = Color(0x1AFFFFFF);    // white 10 %
+const _kSuccess  = Color(0xFF10B981);
+const _kWarning  = Color(0xFFF59E0B);
+const _kError    = Color(0xFFEF4444);
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Password strength helper
+// Password strength
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _PasswordStrength { empty, weak, fair, strong }
+enum _Strength { empty, weak, fair, strong }
 
-_PasswordStrength _evalStrength(String pw) {
-  if (pw.isEmpty) return _PasswordStrength.empty;
-  int score = 0;
-  if (pw.length >= 8) score++;
-  if (RegExp(r'[A-Z]').hasMatch(pw)) score++;
-  if (RegExp(r'[0-9]').hasMatch(pw)) score++;
-  if (RegExp(r'[!@#\$%^&*(),.?":{}|<>]').hasMatch(pw)) score++;
-  if (score <= 1) return _PasswordStrength.weak;
-  if (score == 2) return _PasswordStrength.fair;
-  return _PasswordStrength.strong;
+_Strength _evalStrength(String pw) {
+  if (pw.isEmpty) return _Strength.empty;
+  int s = 0;
+  if (pw.length >= 8) s++;
+  if (RegExp(r'[A-Z]').hasMatch(pw)) s++;
+  if (RegExp(r'[0-9]').hasMatch(pw)) s++;
+  if (RegExp(r'[!@#\$%^&*(),.?":{}|<>]').hasMatch(pw)) s++;
+  if (s <= 1) return _Strength.weak;
+  if (s == 2) return _Strength.fair;
+  return _Strength.strong;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,8 +52,8 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameFocus    = FocusNode();
-  final _emailFocus   = FocusNode();
+  final _nameFocus     = FocusNode();
+  final _emailFocus    = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus  = FocusNode();
 
@@ -50,10 +62,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl  = TextEditingController();
 
-  bool _obscurePassword = true;
-  bool _obscureConfirm  = true;
-  bool _isLoading       = false;
-  _PasswordStrength _strength = _PasswordStrength.empty;
+  bool _obscurePw      = true;
+  bool _obscureConfirm = true;
+  bool _isLoading      = false;
+  _Strength _strength  = _Strength.empty;
 
   @override
   void initState() {
@@ -88,17 +100,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  void _showError(String message) {
+  void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
-        ),
-        backgroundColor: AppColors.danger,
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: _kTxtPri, size: 17),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(msg,
+                style: GoogleFonts.inter(color: _kTxtPri, fontSize: 13)),
+          ),
+        ]),
+        backgroundColor: _kError,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -106,295 +119,247 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  // ── UI helpers ─────────────────────────────────────────────────────────────
-
   (Color, String) get _strengthMeta => switch (_strength) {
-        _PasswordStrength.empty  => (Colors.transparent, ''),
-        _PasswordStrength.weak   => (AppColors.danger,   'Weak'),
-        _PasswordStrength.fair   => (AppColors.warning,  'Fair'),
-        _PasswordStrength.strong => (AppColors.success,  'Strong'),
+        _Strength.empty  => (Colors.transparent, ''),
+        _Strength.weak   => (_kError,   'Weak'),
+        _Strength.fair   => (_kWarning, 'Fair'),
+        _Strength.strong => (_kSuccess, 'Strong'),
       };
 
   int get _strengthSteps => switch (_strength) {
-        _PasswordStrength.empty  => 0,
-        _PasswordStrength.weak   => 1,
-        _PasswordStrength.fair   => 2,
-        _PasswordStrength.strong => 3,
+        _Strength.empty  => 0,
+        _Strength.weak   => 1,
+        _Strength.fair   => 2,
+        _Strength.strong => 3,
       };
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AuthState>(authProvider, (previous, next) {
+    ref.listen<AuthState>(authProvider, (prev, next) {
       final err = next.errorMessage;
-      if (err != null && err != previous?.errorMessage) {
+      if (err != null && err != prev?.errorMessage) {
         _showError(err);
         ref.read(authProvider.notifier).clearError();
       }
     });
 
-    final size = MediaQuery.sizeOf(context);
     final (strengthColor, strengthLabel) = _strengthMeta;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0F1E),
-      body: Stack(
-        children: [
-          // ── Decorative background blobs ─────────────────────────────────
-          Positioned(
-            top: -80,
-            left: -60,
-            child: _Blob(
-              size: 280,
-              color: AppColors.primary.withValues(alpha: 0.35),
-            ),
+      backgroundColor: _kBg,
+      body: Container(
+        // Subtle diagonal gradient background
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_kBg, _kBgAlt],
           ),
-          Positioned(
-            top: 40,
-            right: -40,
-            child: _Blob(
-              size: 200,
-              color: AppColors.secondary.withValues(alpha: 0.25),
-            ),
-          ),
-          Positioned(
-            top: 160,
-            left: size.width * 0.3,
-            child: _Blob(
-              size: 150,
-              color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
-            ),
-          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ── Top bar ──────────────────────────────────────────────
+              _TopBar(),
 
-          // ── Main content ────────────────────────────────────────────────
-          SafeArea(
-            child: Column(
-              children: [
-                // Back button + branding
-                _TopBar(),
-
-                // Scrollable card
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.12),
-                              ),
+              // ── Scrollable form card ──────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _kSurface1,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _kBorder),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 20,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.fromLTRB(24, 26, 24, 28),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Title
+                          Text(
+                            'Create Account',
+                            style: GoogleFonts.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: _kTxtPri,
+                              letterSpacing: -0.5,
                             ),
-                            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Title
-                                  Text(
-                                    'Create Account',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: -0.5,
-                                    ),
-                                  )
-                                      .animate()
-                                      .fadeIn(duration: 500.ms)
-                                      .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
+                          )
+                              .animate()
+                              .fadeIn(duration: 450.ms)
+                              .slideY(begin: 0.25, end: 0, curve: Curves.easeOut),
 
-                                  const SizedBox(height: 6),
+                          const SizedBox(height: 6),
 
-                                  Text(
-                                    'Join DIU CGPA Tracker — your academic journey starts here.',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      color: Colors.white60,
-                                      fontWeight: FontWeight.w400,
-                                      height: 1.5,
-                                    ),
-                                  )
-                                      .animate(delay: 80.ms)
-                                      .fadeIn(duration: 400.ms),
+                          Text(
+                            'Join DIU CGPA Tracker — your academic journey starts here.',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: _kTxtSec,
+                              height: 1.5,
+                            ),
+                          ).animate(delay: 60.ms).fadeIn(duration: 400.ms),
 
-                                  const SizedBox(height: 28),
+                          const SizedBox(height: 24),
 
-                                  // ── Full Name ─────────────────────────
-                                  _GlassField(
-                                    controller: _nameCtrl,
-                                    focusNode: _nameFocus,
-                                    nextFocus: _emailFocus,
-                                    label: 'Full Name',
-                                    hint: 'e.g. Jahirun Hassan',
-                                    icon: Icons.person_outline_rounded,
-                                    textCapitalization: TextCapitalization.words,
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return 'Please enter your full name';
-                                      }
-                                      return null;
-                                    },
-                                  )
-                                      .animate(delay: 140.ms)
-                                      .fadeIn(duration: 400.ms)
-                                      .slideY(begin: 0.15, end: 0),
+                          // Full Name
+                          _DarkField(
+                            controller: _nameCtrl,
+                            focusNode: _nameFocus,
+                            nextFocus: _emailFocus,
+                            label: 'Full Name',
+                            hint: 'e.g. Jahirun Hassan',
+                            icon: Icons.person_outline_rounded,
+                            textCapitalization: TextCapitalization.words,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Please enter your full name'
+                                : null,
+                          ).animate(delay: 100.ms).fadeIn(duration: 380.ms).slideY(begin: 0.12, end: 0),
 
-                                  const SizedBox(height: 16),
+                          const SizedBox(height: 14),
 
-                                  // ── Email ────────────────────────────
-                                  _GlassField(
-                                    controller: _emailCtrl,
-                                    focusNode: _emailFocus,
-                                    nextFocus: _passwordFocus,
-                                    label: 'Email Address',
-                                    hint: 'you@diu.edu.bd',
-                                    icon: Icons.alternate_email_rounded,
-                                    keyboardType: TextInputType.emailAddress,
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) {
-                                        return 'Please enter your email';
-                                      }
-                                      if (!RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$')
-                                          .hasMatch(v.trim())) {
-                                        return 'Enter a valid email address';
-                                      }
-                                      return null;
-                                    },
-                                  )
-                                      .animate(delay: 200.ms)
-                                      .fadeIn(duration: 400.ms)
-                                      .slideY(begin: 0.15, end: 0),
+                          // Email
+                          _DarkField(
+                            controller: _emailCtrl,
+                            focusNode: _emailFocus,
+                            nextFocus: _passwordFocus,
+                            label: 'Email Address',
+                            hint: 'you@diu.edu.bd',
+                            icon: Icons.alternate_email_rounded,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Please enter your email';
+                              }
+                              if (!RegExp(r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$')
+                                  .hasMatch(v.trim())) {
+                                return 'Enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ).animate(delay: 150.ms).fadeIn(duration: 380.ms).slideY(begin: 0.12, end: 0),
 
-                                  const SizedBox(height: 16),
+                          const SizedBox(height: 14),
 
-                                  // ── Password ─────────────────────────
-                                  _GlassField(
-                                    controller: _passwordCtrl,
-                                    focusNode: _passwordFocus,
-                                    nextFocus: _confirmFocus,
-                                    label: 'Password',
-                                    hint: 'Min. 8 characters',
-                                    icon: Icons.lock_outline_rounded,
-                                    obscureText: _obscurePassword,
-                                    suffixIcon: _EyeToggle(
-                                      obscure: _obscurePassword,
-                                      onTap: () => setState(
-                                          () => _obscurePassword = !_obscurePassword),
-                                    ),
-                                    validator: (v) {
-                                      if (v == null || v.isEmpty) {
-                                        return 'Please enter a password';
-                                      }
-                                      if (v.length < 8) {
-                                        return 'Password must be at least 8 characters';
-                                      }
-                                      return null;
-                                    },
-                                  )
-                                      .animate(delay: 260.ms)
-                                      .fadeIn(duration: 400.ms)
-                                      .slideY(begin: 0.15, end: 0),
+                          // Password
+                          _DarkField(
+                            controller: _passwordCtrl,
+                            focusNode: _passwordFocus,
+                            nextFocus: _confirmFocus,
+                            label: 'Password',
+                            hint: 'Min. 8 characters',
+                            icon: Icons.lock_outline_rounded,
+                            obscureText: _obscurePw,
+                            suffixIcon: _EyeToggle(
+                              obscure: _obscurePw,
+                              onTap: () => setState(() => _obscurePw = !_obscurePw),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return 'Please enter a password';
+                              }
+                              if (v.length < 8) {
+                                return 'Password must be at least 8 characters';
+                              }
+                              return null;
+                            },
+                          ).animate(delay: 200.ms).fadeIn(duration: 380.ms).slideY(begin: 0.12, end: 0),
 
-                                  // Strength bar
-                                  if (_strength != _PasswordStrength.empty) ...[
-                                    const SizedBox(height: 10),
-                                    _StrengthBar(
-                                      steps: _strengthSteps,
-                                      color: strengthColor,
-                                      label: strengthLabel,
-                                    ).animate().fadeIn(duration: 250.ms),
-                                  ],
+                          // Strength bar
+                          if (_strength != _Strength.empty) ...[
+                            const SizedBox(height: 10),
+                            _StrengthBar(
+                              steps: _strengthSteps,
+                              color: strengthColor,
+                              label: strengthLabel,
+                            ).animate().fadeIn(duration: 250.ms),
+                          ],
 
-                                  const SizedBox(height: 16),
+                          const SizedBox(height: 14),
 
-                                  // ── Confirm Password ──────────────────
-                                  _GlassField(
-                                    controller: _confirmCtrl,
-                                    focusNode: _confirmFocus,
-                                    label: 'Confirm Password',
-                                    hint: 'Re-enter your password',
-                                    icon: Icons.lock_outline_rounded,
-                                    obscureText: _obscureConfirm,
-                                    textInputAction: TextInputAction.done,
-                                    onFieldSubmitted: (_) => _submit(),
-                                    suffixIcon: _EyeToggle(
-                                      obscure: _obscureConfirm,
-                                      onTap: () => setState(
-                                          () => _obscureConfirm = !_obscureConfirm),
-                                    ),
-                                    validator: (v) {
-                                      if (v == null || v.isEmpty) {
-                                        return 'Please confirm your password';
-                                      }
-                                      if (v != _passwordCtrl.text) {
-                                        return 'Passwords do not match';
-                                      }
-                                      return null;
-                                    },
-                                  )
-                                      .animate(delay: 320.ms)
-                                      .fadeIn(duration: 400.ms)
-                                      .slideY(begin: 0.15, end: 0),
+                          // Confirm password
+                          _DarkField(
+                            controller: _confirmCtrl,
+                            focusNode: _confirmFocus,
+                            label: 'Confirm Password',
+                            hint: 'Re-enter your password',
+                            icon: Icons.lock_outline_rounded,
+                            obscureText: _obscureConfirm,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _submit(),
+                            suffixIcon: _EyeToggle(
+                              obscure: _obscureConfirm,
+                              onTap: () =>
+                                  setState(() => _obscureConfirm = !_obscureConfirm),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return 'Please confirm your password';
+                              }
+                              if (v != _passwordCtrl.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ).animate(delay: 250.ms).fadeIn(duration: 380.ms).slideY(begin: 0.12, end: 0),
 
-                                  const SizedBox(height: 28),
+                          const SizedBox(height: 24),
 
-                                  // ── Submit button ─────────────────────
-                                  _SubmitButton(
-                                    isLoading: _isLoading,
-                                    onPressed: _isLoading ? null : _submit,
-                                  )
-                                      .animate(delay: 380.ms)
-                                      .fadeIn(duration: 400.ms)
-                                      .slideY(begin: 0.2, end: 0),
+                          // Submit
+                          _PrimaryButton(
+                            isLoading: _isLoading,
+                            label: 'Create Account',
+                            trailingIcon: Icons.arrow_forward_rounded,
+                            onPressed: _isLoading ? null : _submit,
+                          ).animate(delay: 300.ms).fadeIn(duration: 380.ms).slideY(begin: 0.15, end: 0),
 
-                                  const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
-                                  // ── Sign in link ──────────────────────
-                                  Center(
-                                    child: GestureDetector(
-                                      onTap: () => context.go('/login'),
-                                      child: RichText(
-                                        text: TextSpan(
-                                          style: GoogleFonts.inter(
-                                            fontSize: 13.5,
-                                            color: Colors.white54,
-                                          ),
-                                          children: [
-                                            const TextSpan(
-                                                text: 'Already have an account?  '),
-                                            TextSpan(
-                                              text: 'Sign In',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 13.5,
-                                                color: AppColors.secondary,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                          // Sign in link
+                          Center(
+                            child: GestureDetector(
+                              onTap: () => context.go('/login'),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: _kTxtSec,
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'Already have an account?  '),
+                                    TextSpan(
+                                      text: 'Sign In',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: _kPrimary,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                  ).animate(delay: 440.ms).fadeIn(duration: 400.ms),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ),
+                          ).animate(delay: 360.ms).fadeIn(duration: 380.ms),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -414,57 +379,56 @@ class _TopBar extends ConsumerWidget {
           IconButton(
             onPressed: () => context.go('/auth'),
             icon: Container(
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: Colors.white.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                border: Border.all(color: _kBorder),
               ),
               child: const Icon(
                 Icons.arrow_back_ios_new_rounded,
-                size: 16,
-                color: Colors.white,
+                size: 15,
+                color: _kTxtSec,
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'DIU CGPA Tracker',
                 style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  color: Colors.white38,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
+                  fontSize: 11,
+                  color: _kTxtDis,
+                  letterSpacing: 0.4,
                 ),
               ),
               Text(
                 'New Account',
                 style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  color: Colors.white,
+                  fontSize: 15,
+                  color: _kTxtPri,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
           const Spacer(),
-          // Step indicator pill
+          // Step indicator
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.2),
+              color: _kPrimary.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+              border: Border.all(color: _kPrimary.withValues(alpha: 0.30)),
             ),
             child: Text(
               'Step 1 of 2',
               style: GoogleFonts.inter(
                 fontSize: 11,
-                color: AppColors.primary.withValues(alpha: 0.9),
+                color: _kPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -476,10 +440,10 @@ class _TopBar extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Glassmorphism text field
+// Dark text field
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GlassField extends StatefulWidget {
+class _DarkField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final FocusNode? nextFocus;
@@ -494,7 +458,7 @@ class _GlassField extends StatefulWidget {
   final ValueChanged<String>? onFieldSubmitted;
   final FormFieldValidator<String>? validator;
 
-  const _GlassField({
+  const _DarkField({
     required this.controller,
     required this.focusNode,
     this.nextFocus,
@@ -511,10 +475,10 @@ class _GlassField extends StatefulWidget {
   });
 
   @override
-  State<_GlassField> createState() => _GlassFieldState();
+  State<_DarkField> createState() => _DarkFieldState();
 }
 
-class _GlassFieldState extends State<_GlassField> {
+class _DarkFieldState extends State<_DarkField> {
   bool _focused = false;
 
   @override
@@ -528,27 +492,15 @@ class _GlassFieldState extends State<_GlassField> {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: _focused
-              ? AppColors.primary.withValues(alpha: 0.7)
+              ? _kPrimary.withValues(alpha: 0.80)
               : Colors.white.withValues(alpha: 0.10),
           width: _focused ? 1.5 : 1.0,
         ),
-        color: _focused
-            ? Colors.white.withValues(alpha: 0.09)
-            : Colors.white.withValues(alpha: 0.05),
-        boxShadow: _focused
-            ? [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                )
-              ]
-            : [],
       ),
       child: TextFormField(
         controller: widget.controller,
@@ -567,39 +519,51 @@ class _GlassFieldState extends State<_GlassField> {
         style: GoogleFonts.inter(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Colors.white,
+          color: _kTxtPri,
         ),
         decoration: InputDecoration(
           labelText: widget.label,
           labelStyle: GoogleFonts.inter(
             fontSize: 13,
-            color: _focused ? AppColors.primary.withValues(alpha: 0.9) : Colors.white38,
+            color: _focused ? _kPrimary : _kTxtSec,
             fontWeight: FontWeight.w500,
           ),
           hintText: widget.hint,
-          hintStyle: GoogleFonts.inter(
-            fontSize: 14,
-            color: Colors.white24,
-          ),
+          hintStyle: GoogleFonts.inter(fontSize: 14, color: _kTxtDis),
           prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Icon(
-              widget.icon,
-              size: 20,
-              color: _focused ? AppColors.primary.withValues(alpha: 0.8) : Colors.white30,
-            ),
+            padding: const EdgeInsets.only(left: 2),
+            child: Icon(widget.icon,
+                size: 19,
+                color: _focused ? _kPrimary : _kTxtSec),
           ),
           suffixIcon: widget.suffixIcon,
-          filled: false,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
+          filled: true,
+          fillColor: _kSurface3,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
           errorStyle: GoogleFonts.inter(
             fontSize: 11.5,
-            color: AppColors.danger,
+            color: _kError,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -624,9 +588,11 @@ class _EyeToggle extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Icon(
-          obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-          size: 20,
-          color: Colors.white38,
+          obscure
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined,
+          size: 19,
+          color: _kTxtDis,
         ),
       ),
     );
@@ -638,10 +604,11 @@ class _EyeToggle extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StrengthBar extends StatelessWidget {
-  final int steps;     // 1, 2, or 3
+  final int steps;
   final Color color;
   final String label;
-  const _StrengthBar({required this.steps, required this.color, required this.label});
+  const _StrengthBar(
+      {required this.steps, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -653,10 +620,10 @@ class _StrengthBar extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
-              height: 4,
+              height: 3,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                color: active ? color : Colors.white12,
+                color: active ? color : Colors.white.withValues(alpha: 0.10),
               ),
             ),
           );
@@ -665,10 +632,9 @@ class _StrengthBar extends StatelessWidget {
         Text(
           label,
           style: GoogleFonts.inter(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: color),
         ),
       ],
     );
@@ -676,46 +642,46 @@ class _StrengthBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Submit button
+// Primary button
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SubmitButton extends StatelessWidget {
+class _PrimaryButton extends StatelessWidget {
   final bool isLoading;
+  final String label;
+  final IconData trailingIcon;
   final VoidCallback? onPressed;
-  const _SubmitButton({required this.isLoading, required this.onPressed});
+
+  const _PrimaryButton({
+    required this.isLoading,
+    required this.label,
+    required this.trailingIcon,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onPressed,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 56,
+      child: Container(
+        height: 52,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: onPressed != null
-              ? const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF4F46E5), Color(0xFF4338CA)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: onPressed == null ? Colors.white12 : null,
+          borderRadius: BorderRadius.circular(14),
+          color: onPressed != null ? _kPrimary : _kPrimary.withValues(alpha: 0.40),
           boxShadow: onPressed != null
-              ? [
+              ? const [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.45),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  )
+                    color: Color(0x336C63FF),
+                    blurRadius: 14,
+                    offset: Offset(0, 4),
+                  ),
                 ]
-              : [],
+              : null,
         ),
         child: Center(
           child: isLoading
               ? const SizedBox(
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
                     color: Colors.white,
@@ -725,49 +691,19 @@ class _SubmitButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Create Account',
+                      label,
                       style: GoogleFonts.outfit(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
-                        letterSpacing: 0.3,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
+                    const SizedBox(width: 7),
+                    Icon(trailingIcon, color: Colors.white, size: 17),
                   ],
                 ),
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Decorative blob
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Blob extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _Blob({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-        child: const SizedBox.expand(),
       ),
     );
   }
