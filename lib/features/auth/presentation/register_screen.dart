@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
+
 
 // ── Onboarding design tokens ──────────────────────────────────────────────────
 const _kBg       = Color(0xFF07111F);
