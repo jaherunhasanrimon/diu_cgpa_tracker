@@ -7,6 +7,9 @@ import '../../../../academic/domain/curriculum_engine.dart';
 import '../../../providers/registration_provider.dart';
 
 // ── Onboarding design tokens (mirrored from wizard screen) ───────────────────
+const _kSurface2 = Color(0xFF161D2E);
+const _kPrimary  = Color(0xFF6C63FF);
+const _kTxtPri   = Color(0xFFF8FAFC);
 const _kTxtSec   = Color(0xFF94A3B8);
 const _kTxtDis   = Color(0xFF64748B);
 const _kSuccess  = Color(0xFF10B981);
