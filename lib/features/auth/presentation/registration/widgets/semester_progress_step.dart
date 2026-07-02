@@ -3,8 +3,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../../core/theme/app_colors.dart';
 import '../../../providers/registration_provider.dart';
+
+// ── Onboarding design tokens ──────────────────────────────────────────────────
+const _kSurface2 = Color(0xFF161D2E);
+const _kPrimary  = Color(0xFF6C63FF);
+const _kTxtPri   = Color(0xFFF8FAFC);
+const _kTxtSec   = Color(0xFF94A3B8);
+const _kBorder   = Color(0x1AFFFFFF);
+const _kSuccess  = Color(0xFF10B981);
 
 class SemesterProgressStep extends ConsumerWidget {
   const SemesterProgressStep({super.key});
@@ -12,7 +19,7 @@ class SemesterProgressStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(registrationProvider);
-    final completedSemester = data.completedSemester;
+    final completed = data.completedSemester;
 
     return SingleChildScrollView(
       child: Column(
@@ -20,41 +27,28 @@ class SemesterProgressStep extends ConsumerWidget {
         children: [
           Text(
             'Here are the semesters you\'ve completed so far.',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
+            style: GoogleFonts.inter(fontSize: 13, color: _kTxtSec, height: 1.5),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
 
-          // ── Stats banner ────────────────────────────────────────────────
+          // ── Stats banner ─────────────────────────────────────────────────
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.10),
-                  AppColors.secondary.withValues(alpha: 0.07),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.18),
-              ),
+              color: _kSurface2,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _kBorder),
             ),
             child: Row(
               children: [
                 Text(
-                  '$completedSemester',
+                  '$completed',
                   style: GoogleFonts.outfit(
-                    fontSize: 52,
+                    fontSize: 48,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
+                    color: _kPrimary,
                     height: 1,
                   ),
                 ),
@@ -62,64 +56,53 @@ class SemesterProgressStep extends ConsumerWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Semesters',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      'Completed',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                    Text('Semesters',
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: _kTxtSec)),
+                    Text('Completed',
+                        style: GoogleFonts.outfit(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: _kTxtPri,
+                        )),
                   ],
                 ),
                 const Spacer(),
-                // Mini progress ring using CircularProgressIndicator
+                // Mini progress ring
                 SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: completedSemester / 12,
-                        strokeWidth: 4,
-                        backgroundColor: AppColors.border,
-                        color: AppColors.primary,
-                      ),
-                      Text(
-                        '${((completedSemester / 12) * 100).round()}%',
-                        style: GoogleFonts.inter(
+                  width: 44,
+                  height: 44,
+                  child: Stack(alignment: Alignment.center, children: [
+                    CircularProgressIndicator(
+                      value: completed / 12,
+                      strokeWidth: 3.5,
+                      backgroundColor: Colors.white.withValues(alpha: 0.10),
+                      color: _kPrimary,
+                    ),
+                    Text(
+                      '${((completed / 12) * 100).round()}%',
+                      style: GoogleFonts.inter(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                          color: _kPrimary),
+                    ),
+                  ]),
                 ),
               ],
             ),
-          ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.1, end: 0),
+          ).animate().fadeIn(duration: 340.ms).slideY(begin: 0.08, end: 0),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
 
-          // ── Semester tiles ──────────────────────────────────────────────
-          if (completedSemester == 0)
+          // ── Semester tiles ───────────────────────────────────────────────
+          if (completed == 0)
             _EmptyState()
           else
-            ...List.generate(completedSemester, (index) {
-              final sem = index + 1;
-              return _SemesterTile(semester: sem)
-                  .animate(delay: Duration(milliseconds: 50 * index))
+            ...List.generate(completed, (i) {
+              return _SemesterTile(semester: i + 1)
+                  .animate(delay: Duration(milliseconds: 45 * i))
                   .fadeIn(duration: 280.ms)
-                  .slideX(begin: 0.08, end: 0, curve: Curves.easeOut);
+                  .slideX(begin: 0.06, end: 0, curve: Curves.easeOut);
             }),
         ],
       ),
@@ -131,77 +114,61 @@ class _SemesterTile extends StatelessWidget {
   final int semester;
   const _SemesterTile({required this.semester});
 
-  // Assign a subtle color per semester to give each row a unique accent
-  Color get _accentColor {
-    const colors = [
-      Color(0xFF6366F1), // indigo
-      Color(0xFF06B6D4), // cyan
-      Color(0xFFF59E0B), // amber
-      Color(0xFF10B981), // green
-      Color(0xFF8B5CF6), // purple
-      Color(0xFFF43F5E), // rose
-    ];
-    return colors[(semester - 1) % colors.length];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = _accentColor;
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: AppColors.backgroundLight,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        color: _kSurface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _kBorder),
       ),
       child: Row(
         children: [
-          // Colored circle with check
+          // Check circle
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: _kSuccess.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.check_rounded, color: color, size: 18),
+            child: const Icon(Icons.check_rounded, color: _kSuccess, size: 16),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Semester $semester',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Semester $semester',
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _kTxtPri),
                 ),
-              ),
-              Text(
-                'Level ${((semester - 1) ~/ 3) + 1}  ·  Term ${((semester - 1) % 3) + 1}',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
+                Text(
+                  'Level ${((semester - 1) ~/ 3) + 1}  ·  Term ${((semester - 1) % 3) + 1}',
+                  style: GoogleFonts.inter(fontSize: 11, color: _kTxtSec),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Spacer(),
+          // Done badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.10),
+              color: _kSuccess.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               'Done',
               style: GoogleFonts.inter(
-                fontSize: 11,
-                color: AppColors.success,
-                fontWeight: FontWeight.w700,
-              ),
+                  fontSize: 11,
+                  color: _kSuccess,
+                  fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -216,18 +183,15 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           Icon(Icons.school_outlined,
-              size: 48, color: AppColors.textSecondary.withValues(alpha: 0.4)),
+              size: 44, color: Colors.white.withValues(alpha: 0.15)),
           const SizedBox(height: 12),
           Text(
             'No semesters selected yet.\nGo back and choose your current semester.',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
+                fontSize: 13, color: _kTxtSec, height: 1.5),
           ),
         ],
       ),
